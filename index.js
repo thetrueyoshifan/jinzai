@@ -7,6 +7,7 @@
     const request = require('request').defaults({ encoding: null, jar: true });
     const {sqlPromiseSafe, sqlPromiseSimple} = require("./utils/sqlClient");
     const {sendData} = require("./utils/mqAccess");
+    const Discord_CDN_Accepted_Files = ['jpg','jpeg','jfif','png','webp','gif'];
 
     let exsitingTags = new Map();
     (await sqlPromiseSafe(`SELECT id, name FROM sequenzia_index_tags`)).rows.map(e => exsitingTags.set(e.name, e.id));
@@ -72,26 +73,41 @@
         }).filter(e => !!e);
     }
     async function queryForTags() {
-        const messages = (await sqlPromiseSafe(`SELECT attachment_name, channel, attachment_hash, eid, cache_proxy
+        const messages = (await sqlPromiseSafe(`SELECT attachment_name, channel, attachment_hash, eid, cache_proxy, sizeH, sizeW
                                                 FROM kanmi_records
                                                 WHERE attachment_hash IS NOT NULL
                                                   AND channel = ?
                                                   AND eid NOT IN (SELECT eid FROM sequenzia_index_matches)
                                                 ORDER BY eid DESC
-                                                LIMIT 100`, ['889346533860970496'], true)).rows.map(e => {
+                                                LIMIT 5000`, ['716529641808199690'], true)).rows.map(e => {
             const url = (( e.cache_proxy) ? e.cache_proxy.startsWith('http') ? e.cache_proxy : `https://media.discordapp.net/attachments${e.cache_proxy}` : (e.attachment_hash && e.attachment_name) ? `https://media.discordapp.net/attachments/` + ((e.attachment_hash.includes('/')) ? e.attachment_hash : `${e.channel}/${e.attachment_hash}/${e.attachment_name}`) : undefined) + '';
             return {
                 url,
-                eid: e.eid
+                ...e
             }
         })
+        //.\Downloads\DanbooruDownloader\DanbooruDownloader.exe dump --username konata_fan337 --api-key SFZ4391wUixCmx6EMovAQEyN
         console.log(messages)
         let msgRequests = messages.reduce((promiseChain, e, i, a) => {
             return promiseChain.then(() => new Promise(async(completed) => {
                 const fileName = e.url.split('/').pop()
                 const imageData = await new Promise(ok => {
+                    function getimageSizeParam() {
+                        if (e.sizeH && e.sizeW && Discord_CDN_Accepted_Files.indexOf(e.attachment_name.split('.').pop().toLowerCase()) !== -1 && (e.sizeH > 512 || e.sizeW > 512)) {
+                            let ih = 512;
+                            let iw = 512;
+                            if (e.sizeW >= e.sizeH) {
+                                iw = (e.sizeW * (512 / e.sizeH)).toFixed(0)
+                            } else {
+                                ih = (e.sizeH * (512 / e.sizeW)).toFixed(0)
+                            }
+                            return `?width=${iw}&height=${ih}`
+                        } else {
+                            return ''
+                        }
+                    }
                     request.get({
-                        url: e.url,
+                        url: e.url + getimageSizeParam(),
                         headers: {
                             'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
                             'accept-language': 'en-US,en;q=0.9',
@@ -153,6 +169,7 @@
                         })
                     })
                     if (requestResults) {
+                        setTimeout(() => {completed(true);}, 750);
                         try { fs.unlinkSync(`./${fileName}`); }
                         catch (e) { console.error("Failed to delete temp file") }
                         const getResults = await new Promise(ok => {
@@ -193,7 +210,6 @@
                             const tags = await parseResponse(e.eid, getResults);
                             await updateTagsPairs(e.eid, tags);
                             console.log("Tags updated for " + e.eid)
-                            setTimeout(() => {completed(true);}, 1000);
                         } else {
                             console.error('Failed to get results from deepbooru')
                             completed(false);
