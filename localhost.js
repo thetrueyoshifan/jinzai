@@ -176,9 +176,6 @@
                 })
             }))
         }
-        console.log('Starting MIITS Tagger...');
-        await queryImageTags();
-        console.log('MIITS Tagger finished!');
         return false;
     }
     const resultsWatcher = chokidar.watch(config.deepbooru_output_path, {
@@ -229,14 +226,22 @@
                         resolve(true);
                     }))
                 }, Promise.resolve());
-                requests.then(() => {
-                    console.log(`Search Jobs Completed!`);
+                requests.then(async () => {
+                    if (!r) {
+                        console.log('Search Jobs Completed!, Starting MIITS Tagger...');
+                        await queryImageTags();
+                        console.log('MIITS Tagger finished!');
+                    }
                 })
             } else {
                 r = await queryForTags();
+                console.log('Search Jobs Completed!, Starting MIITS Tagger...');
+                await queryImageTags();
+                console.log('MIITS Tagger finished!');
             }
             if (r)
                 break;
+            console.log('Waiting for next run... Zzzzz')
         }
         runTimer = setTimeout(parseUntilDone, 300000);
     }
