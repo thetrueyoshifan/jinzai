@@ -118,7 +118,7 @@
         while (downlaods.length !== 0) {
             const toDo = downlaods.slice(0,10);
             console.log(`${downlaods.length} Left to download`)
-            await toDo.forEach(async e => {
+            await toDo.forEach(async (e,i) => {
                 const fileExt = e.url.split('.').pop();
                 return await new Promise(ok => {
                     function getimageSizeParam() {
@@ -158,11 +158,13 @@
                                 fs.writeFileSync(path.join(config.deepbooru_input_path, `${e.eid}.${fileExt}`), body);
                                 ok(true);
                                 console.log(`Doewnloaded ${e.url}`)
+
                             } catch (err) {
                                 console.error(err);
                                 ok(false);
                             }
                         }
+                        delete downlaods[i];
                     })
                 })
             })
