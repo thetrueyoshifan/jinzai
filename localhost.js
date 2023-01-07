@@ -215,33 +215,35 @@
     let runTimer = null;
     async function parseUntilDone(whereClause) {
         while (true) {
-            let r = true;
+            let noResults = 0;
             if (whereClause) {
                 let requests = config.search.reduce((promiseChain, w) => {
                     return promiseChain.then(() => new Promise(async (resolve) => {
                         console.log(`Searching for "${w}"...`)
                         const _r = await queryForTags(w);
                         if (_r)
-                            r = false;
+                            noResults++;
                         resolve(true);
                     }))
                 }, Promise.resolve());
                 requests.then(async () => {
-                    if (!r) {
+                    if (noResults === config.search.length) {
                         console.log('Search Jobs Completed!, Starting MIITS Tagger...');
                         await queryImageTags();
                         console.log('MIITS Tagger finished!');
                     }
                 })
             } else {
-                r = await queryForTags();
+                const _r = await queryForTags();
+                if (_r)
+                    noResults++;
                 console.log('Search Jobs Completed!, Starting MIITS Tagger...');
                 await queryImageTags();
                 console.log('MIITS Tagger finished!');
             }
-            if (r)
+            if ((whereClause && noResults === config.search.length) || (!whereClause && noResults === 1))
                 break;
-            console.log('More work to be done, no sleep!')
+            console.log('More work to be done, no sleep!');
 
         }
         console.log('Waiting for next run... Zzzzz')
