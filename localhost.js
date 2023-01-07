@@ -105,7 +105,7 @@
                                                   AND channel = ?
                                                   AND eid NOT IN (SELECT eid FROM sequenzia_index_matches)
                                                 ORDER BY eid DESC
-                                                LIMIT 10`, [config.channel], true)).rows.map(e => {
+                                                LIMIT ?`, [config.channel, config.pull_limit || 100], true)).rows.map(e => {
             const url = (( e.cache_proxy) ? e.cache_proxy.startsWith('http') ? e.cache_proxy : `https://media.discordapp.net/attachments${e.cache_proxy}` : (e.attachment_hash && e.attachment_name) ? `https://media.discordapp.net/attachments/` + ((e.attachment_hash.includes('/')) ? e.attachment_hash : `${e.channel}/${e.attachment_hash}/${e.attachment_name}`) : undefined) + '';
             return {
                 url,
