@@ -5,6 +5,8 @@
     const { spawn, exec } = require("child_process");
     const fs = require('fs');
     const path = require('path');
+    const chokidar = require('chokidar');
+    const slash = require('slash');
     const request = require('request').defaults({ encoding: null, jar: true });
     const {sqlPromiseSafe, sqlPromiseSimple} = require("./utils/sqlClient");
     const {sendData} = require("./utils/mqAccess");
@@ -92,7 +94,7 @@
                     console.error(`Mugino Meltdown! MIITS reported a error!`);
                     resolve(false)
                 } else {
-                    console.log(`Tagging Completed in ${((startTime - Date.now()) / 1000).toFixed(0)} sec!`);
+                    console.log(`Tagging Completed in ${((Date.now() - startTime) / 1000).toFixed(0)} sec!`);
                     resolve(true)
                 }
             })
@@ -113,7 +115,7 @@
             }
         })
         console.log(messages.length)
-        let msgRequests = messages.reduce((promiseChain, e, i, a) => {
+        let msgRequests = messages.filter(e => !fs.existsSync((path.join(config.deepbooru_input_path, `${e.eid}.${e.url.split('.').pop()}`)))).reduce((promiseChain, e, i, a) => {
             return promiseChain.then(() => new Promise(async(completed) => {
                 const fileExt = e.url.split('.').pop();
                 completed(await new Promise(ok => {
@@ -165,29 +167,37 @@
         msgRequests.then(async () => {
             console.log('Completed Image Download!');
             await queryImageTags();
-            let imageTagRequests = messages.reduce((promiseChain, e, i, a) => {
-                return promiseChain.then(() => new Promise(async(completed) => {
-                    const jsonFilePath = path.join(config.deepbooru_output_path, `${e.eid}.json`)
-                    if (fs.existsSync(jsonFilePath)) {
-                        const tagResults = JSON.parse(fs.readFileSync(jsonFilePath).toString());
-                        console.error(`Entity ${e.eid} has ${Object.keys(tagResults).length} tags!`);
-                        Object.keys(tagResults).map(async k => {
-                            const r = tagResults[k];
-                            await addTagForEid(e.eid, k, r);
-                        });
-                        fs.unlinkSync(jsonFilePath);
-                        completed(true);
-                    } else {
-                        console.error(`Entity ${e.eid} has no resulting JSON file! Maybe something went wrong withs MIITS`);
-                        completed(false);
-                    }
-                }))
-            }, Promise.resolve());
-            msgRequests.then(async () => {
-                console.log('Completed Image Tagging!');
-            });
         })
     }
+    const resultsWatcher = chokidar.watch(config.deepbooru_output_path, {
+        ignored: /[\/\\]\./,
+        persistent: true,
+        usePolling: true,
+        awaitWriteFinish: {
+            stabilityThreshold: 2000,
+            pollInterval: 100
+        },
+        depth: 1,
+        ignoreInitial: false
+    });
+    resultsWatcher
+        .on('add', function (filePath) {
+            const eid = path.basename(filePath).split('.')[0];
+            const jsonFilePath = slash(filePath)
+            const tagResults = JSON.parse(fs.readFileSync(jsonFilePath).toString());
+            console.error(`Entity ${eid} has ${Object.keys(tagResults).length} tags!`);
+            Object.keys(tagResults).map(async k => {
+                const r = tagResults[k];
+                await addTagForEid(eid, k, r);
+            });
+            fs.unlinkSync(jsonFilePath);
+        })
+        .on('error', function (error) {
+            console.error(error);
+        })
+        .on('ready', function () {
+            console.log("MIITS Results Watcher Ready!")
+        });
     //cron.schedule('45 * * * *', async () => { queryForTags(); });
     await queryForTags();
 })()
