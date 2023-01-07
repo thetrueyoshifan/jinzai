@@ -19,8 +19,8 @@ import path from "path";
     (await sqlPromiseSafe(`SELECT id, name FROM sequenzia_index_tags`)).rows.map(e => exsitingTags.set(e.name, e.id));
     console.log("Reading tags from model...");
     let modelTags = new Map();
-    const _modelTags = (fs.readFileSync('./tags.txt')).toString().trim().split('\n').map(line => line.trim());
-    const _modelCategories = JSON.parse(fs.readFileSync('./categories.json').toString());
+    const _modelTags = (fs.readFileSync(path.join(config.deepbooru_model_path, './tags.txt'))).toString().trim().split('\n').map(line => line.trim());
+    const _modelCategories = JSON.parse(fs.readFileSync(path.join(config.deepbooru_model_path, './categories.json')).toString());
     Object.values(_modelCategories).map((e,i,a) => {
         const c = ((n) => {
             switch (n) {
