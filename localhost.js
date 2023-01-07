@@ -157,6 +157,7 @@
                             try {
                                 fs.writeFileSync(path.join(config.deepbooru_input_path, `${e.eid}.${fileExt}`), body);
                                 ok(true);
+                                console.log(`Doewnloaded ${e.url}`)
                             } catch (err) {
                                 console.error(err);
                                 ok(false);
