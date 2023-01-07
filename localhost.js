@@ -120,7 +120,7 @@
         })
         while (Object.keys(downlaods).length !== 0) {
             let downloadKeys = Object.keys(downlaods).slice(0,8)
-            console.log(`${downlaods.length} Left to download`)
+            console.log(`${Object.keys(downlaods).length} Left to download`)
             await Promise.all(downloadKeys.map(async k => {
                 const e = downlaods[k];
                 const fileExt = e.url.split('.').pop();
