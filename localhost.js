@@ -169,12 +169,21 @@
                         } else {
                             try {
                                 if (body && body.length > 100) {
-                                    const  mime = await fileType.fromBuffer(body);
-                                    if (mime && mime.ext && ['png', 'jpg', 'webp'].indexOf(mime.ext) !== -1) {
-                                        fs.writeFileSync(path.join(config.deepbooru_input_path, `${e.eid}.${mime.ext}`), body);
+                                    const mime = await new Promise(ext => {
+                                        fileType.fromBuffer(body,function(err, result) {
+                                            if (err) {
+                                                console.log(err);
+                                                ext(null);
+                                            } else {
+                                                ext(result.ext);
+                                            }
+                                        });
+                                    })
+                                    if (mime && ['png', 'jpg', 'webp'].indexOf(mime) !== -1) {
+                                        fs.writeFileSync(path.join(config.deepbooru_input_path, `${e.eid}.${mime}`), body);
                                         console.log(`Downloaded ${e.url}`)
                                         ok(true);
-                                    } else if (mime && mime.ext && ['gif', 'tiff'].indexOf(mime.ext) !== -1) {
+                                    } else if (mime && ['gif', 'tiff'].indexOf(mime) !== -1) {
                                         await sharp(body)
                                             .toFormat('png')
                                             .toFile(path.join(config.deepbooru_input_path, `${e.eid}.png`), (err, info) => {
