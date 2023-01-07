@@ -227,7 +227,7 @@
                     }))
                 }, Promise.resolve());
                 requests.then(async () => {
-                    if (noResults === config.search.length) {
+                    if (noResults !== config.search.length) {
                         console.log('Search Jobs Completed!, Starting MIITS Tagger...');
                         await queryImageTags();
                         console.log('MIITS Tagger finished!');
