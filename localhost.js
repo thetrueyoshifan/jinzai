@@ -175,7 +175,7 @@
                                         console.log(`Downloaded ${e.url}`)
                                         ok(true);
                                     } else if (mime && mime.ext && ['gif', 'tiff'].indexOf(mime.ext) !== -1) {
-                                        sharp(body)
+                                        await sharp(body)
                                             .toFormat('png')
                                             .toFile(path.join(config.deepbooru_input_path, `${e.eid}.png`), (err, info) => {
                                                 if (err) {
