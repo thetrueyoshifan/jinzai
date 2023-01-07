@@ -6,7 +6,6 @@
     const fs = require('fs');
     const path = require('path');
     const chokidar = require('chokidar');
-    const slash = require('slash');
     const request = require('request').defaults({ encoding: null, jar: true });
     const {sqlPromiseSafe, sqlPromiseSimple} = require("./utils/sqlClient");
     const {sendData} = require("./utils/mqAccess");
@@ -185,7 +184,7 @@
     resultsWatcher
         .on('add', function (filePath) {
             const eid = path.basename(filePath).split('.')[0];
-            const jsonFilePath = slash(filePath)
+            const jsonFilePath = path.resolve(filePath)
             const tagResults = JSON.parse(fs.readFileSync(jsonFilePath).toString());
             console.error(`Entity ${eid} has ${Object.keys(tagResults).length} tags!`);
             Object.keys(tagResults).map(async k => {
