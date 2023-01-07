@@ -114,12 +114,13 @@
             }
         })
         console.log(messages.length)
-        let msgRequests = messages
+        let downlaods = messages
             .filter(e => !fs.existsSync((path.join(config.deepbooru_input_path, `${e.eid}.${e.url.split('.').pop()}`))) || !fs.existsSync((path.join(config.deepbooru_output_path, `${e.eid}.json`))))
-            .reduce((promiseChain, e, i, a) => {
-            return promiseChain.then(() => new Promise(async(completed) => {
+        while (downlaods.length !== 0) {
+            const toDo = downlaods.slice(0,10);
+            return toDo.forEach(async e => {
                 const fileExt = e.url.split('.').pop();
-                completed(await new Promise(ok => {
+                return await new Promise(ok => {
                     function getimageSizeParam() {
                         if (e.sizeH && e.sizeW && Discord_CDN_Accepted_Files.indexOf(e.attachment_name.split('.').pop().toLowerCase()) !== -1 && (e.sizeH > 512 || e.sizeW > 512)) {
                             let ih = 512;
@@ -162,13 +163,10 @@
                             }
                         }
                     })
-                }));
-            }))
-        }, Promise.resolve());
-        msgRequests.then(async () => {
-            console.log('Completed Image Download!');
-            await queryImageTags();
-        })
+                })
+            })
+        }
+        await queryImageTags();
     }
     const resultsWatcher = chokidar.watch(config.deepbooru_output_path, {
         ignored: /[\/\\]\./,
@@ -200,6 +198,7 @@
         .on('ready', function () {
             console.log("MIITS Results Watcher Ready!")
         });
-    cron.schedule(config.check_cron || '45 * * * *', queryForTags);
+    //cron.schedule(config.check_cron || '45 * * * *', queryForTags);
+
     await queryForTags();
 })()
