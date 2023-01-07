@@ -264,7 +264,10 @@
         .on('ready', function () {
             console.log("MIITS Results Watcher Ready!")
         });
-    //cron.schedule(config.check_cron || '45 * * * *', queryForTags);
+    async function generatePairView() {
+        const query = `SELECT eid, GROUP_CONCAT(type,'/',rating,'/',name ORDER BY type DESC, rating DESC, name ASC SEPARATOR '; ') AS tags FROM sequenzia_index_matches, sequenzia_index_tags WHERE (sequenzia_index_tags.id = sequenzia_index_matches.tag) GROUP BY eid`;
+        await sqlPromiseSafe(`CREATE OR REPLACE VIEW sequenzia_index_tags_eids AS (${query}) ORDER BY eid`);
+    }
 
     let runTimer = null;
     async function parseUntilDone(whereClause) {
@@ -306,6 +309,8 @@
         console.log('Waiting for next run... Zzzzz')
         runTimer = setTimeout(parseUntilDone, 300000);
     }
+    await generatePairView();
     await parseUntilDone(config.search);
+    setInterval(generatePairView, 300000);
     console.log("First pass completed!")
 })()
