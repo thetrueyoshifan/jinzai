@@ -225,7 +225,7 @@
                         r = false;
                 })
             } else {
-                r = await queryForTags(w);
+                r = await queryForTags();
             }
             if (r)
                 break;
