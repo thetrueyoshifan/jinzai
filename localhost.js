@@ -99,15 +99,15 @@
             })
         })
     }
-    async function queryForTags() {
+    async function queryForTags(whereClause) {
         const messages = (await sqlPromiseSafe(`SELECT attachment_name, channel, attachment_hash, eid, cache_proxy, sizeH, sizeW
                                                 FROM kanmi_records
                                                 WHERE attachment_hash IS NOT NULL
                                                   AND (attachment_name LIKE '%.jp%_' OR attachment_name LIKE '%.jfif' OR attachment_name LIKE '%.png')
-                                                  AND channel = ?
+                                                  ${(whereClause) ? 'AND (' + whereClause + ')' : ''}
                                                   AND eid NOT IN (SELECT eid FROM sequenzia_index_matches)
                                                 ORDER BY eid DESC
-                                                LIMIT ?`, [config.channel, config.pull_limit || 100], true)).rows.map(e => {
+                                                LIMIT ?`, [channel, config.pull_limit || 100], true)).rows.map(e => {
             const url = (( e.cache_proxy) ? e.cache_proxy.startsWith('http') ? e.cache_proxy : `https://media.discordapp.net/attachments${e.cache_proxy}` : (e.attachment_hash && e.attachment_name) ? `https://media.discordapp.net/attachments/` + ((e.attachment_hash.includes('/')) ? e.attachment_hash : `${e.channel}/${e.attachment_hash}/${e.attachment_name}`) : undefined) + '';
             return {
                 url,
@@ -119,8 +119,10 @@
         messages.filter(e => !fs.existsSync((path.join(config.deepbooru_input_path, `${e.eid}.${e.url.split('.').pop()}`))) && !fs.existsSync((path.join(config.deepbooru_output_path, `${e.eid}.json`)))).map((e,i) => {
             downlaods[i] = e
         })
+        if (messages.length === 0)
+            return true;
         while (Object.keys(downlaods).length !== 0) {
-            let downloadKeys = Object.keys(downlaods).slice(0,8)
+            let downloadKeys = Object.keys(downlaods).slice(0,25)
             console.log(`${Object.keys(downlaods).length} Left to download`)
             await Promise.all(downloadKeys.map(async k => {
                 const e = downlaods[k];
@@ -174,7 +176,9 @@
                 })
             }))
         }
+        console.log('Starting MIITS Tagger...');
         await queryImageTags();
+        return false;
     }
     const resultsWatcher = chokidar.watch(config.deepbooru_output_path, {
         ignored: /[\/\\]\./,
@@ -210,5 +214,24 @@
         });
     //cron.schedule(config.check_cron || '45 * * * *', queryForTags);
 
-    await queryForTags();
+    let runTimer = null;
+    async function parseUntilDone(whereClause) {
+        while (true) {
+            let r = true;
+            if (whereClause) {
+                await Promise.all(config.search.map(async w => {
+                    const _r = await queryForTags(w);
+                    if (!_r)
+                        r = false;
+                }))
+            } else {
+                r = await queryForTags(w);
+            }
+            if (r)
+                break;
+        }
+        runTimer = setTimeout(parseUntilDone, 300000);
+    }
+    await parseUntilDone(config.search);
+    console.log("First pass completed!")
 })()
