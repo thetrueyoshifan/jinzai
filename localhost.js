@@ -266,7 +266,7 @@
         });
     async function generatePairView() {
         const query = `SELECT eid, GROUP_CONCAT(type,'/',rating,'/',name ORDER BY type DESC, rating DESC, name ASC SEPARATOR '; ') AS tags FROM sequenzia_index_matches, sequenzia_index_tags WHERE (sequenzia_index_tags.id = sequenzia_index_matches.tag) GROUP BY eid`;
-        await sqlPromiseSafe(`CREATE OR REPLACE VIEW sequenzia_index_tags_eids AS (${query}) ORDER BY eid`);
+        await sqlPromiseSafe(`CREATE OR REPLACE VIEW sequenzia_index_tags_eids AS (${query})`);
     }
 
     let runTimer = null;
