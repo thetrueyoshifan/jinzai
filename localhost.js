@@ -161,10 +161,14 @@
                             ok(null)
                         } else {
                             try {
-                                fs.writeFileSync(path.join(config.deepbooru_input_path, `${e.eid}.${fileExt}`), body);
-                                ok(true);
-                                console.log(`Doewnloaded ${e.url}`)
-
+                                if (body && body.length > 100) {
+                                    fs.writeFileSync(path.join(config.deepbooru_input_path, `${e.eid}.${fileExt}`), body);
+                                    ok(true);
+                                    console.log(`Downloaded ${e.url}`)
+                                } else {
+                                    console.error(`Download failed, File size to small: ${e.url}`);
+                                    ok(false);
+                                }
                             } catch (err) {
                                 console.error(err);
                                 ok(false);
