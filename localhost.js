@@ -70,8 +70,9 @@
             eid, tagId, rating, rating
         ])
     }
-    function updateTagsPairs(eid, tags) {
-        return tags.map(async tag => await addTagForEid(eid, tag.name, tag.rating))
+    async function updateTagsPairs(eid, tags) {
+        await sqlPromiseSafe(`UPDATE kanmi_records SET tags = ? WHERE eid = ?`, [ tags.map(t => `${modelTags.get(name) || 0}/${t.rating}/${t.name}`).join('; '), eid ])
+        return await tags.map(async tag => await addTagForEid(eid, tag.name, tag.rating))
     }
     async function queryImageTags() {
         console.log('Processing images for tags...')
