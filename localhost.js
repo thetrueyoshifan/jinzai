@@ -264,10 +264,6 @@
         .on('ready', function () {
             console.log("MIITS Results Watcher Ready!")
         });
-    async function generatePairView() {
-        const query = `SELECT eid, GROUP_CONCAT(type,'/',rating,'/',name ORDER BY type DESC, rating DESC, name ASC SEPARATOR '; ') AS tags FROM sequenzia_index_matches, sequenzia_index_tags WHERE (sequenzia_index_tags.id = sequenzia_index_matches.tag) GROUP BY eid`;
-        await sqlPromiseSafe(`REPLACE INTO kanmi_records (eid,tags) ${query}`);
-    }
 
     let runTimer = null;
     async function parseUntilDone(whereClause) {
@@ -304,13 +300,11 @@
             if ((whereClause && noResults === whereClause.length) || (!whereClause && noResults === 1))
                 break;
             console.log('More work to be done, no sleep!');
-
         }
         console.log('Waiting for next run... Zzzzz')
         runTimer = setTimeout(parseUntilDone, 300000);
     }
-    await generatePairView();
+
     await parseUntilDone(config.search);
-    setInterval(generatePairView, 300000);
     console.log("First pass completed!")
 })()
