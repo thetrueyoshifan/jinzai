@@ -114,10 +114,10 @@
             }
         })
         console.log(messages.length)
-        let downlaods = messages
-            .filter(e => !fs.existsSync((path.join(config.deepbooru_input_path, `${e.eid}.${e.url.split('.').pop()}`))) || !fs.existsSync((path.join(config.deepbooru_output_path, `${e.eid}.json`))))
+        let downlaods = messages.filter(e => !fs.existsSync((path.join(config.deepbooru_input_path, `${e.eid}.${e.url.split('.').pop()}`))) || !fs.existsSync((path.join(config.deepbooru_output_path, `${e.eid}.json`))))
         while (downlaods.length !== 0) {
             const toDo = downlaods.slice(0,10);
+            console.log(`${downlaods.length} Left to download`)
             return toDo.forEach(async e => {
                 const fileExt = e.url.split('.').pop();
                 return await new Promise(ok => {
