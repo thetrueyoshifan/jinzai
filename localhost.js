@@ -114,11 +114,14 @@
             }
         })
         console.log(messages.length)
-        let downlaods = messages.filter(e => !fs.existsSync((path.join(config.deepbooru_input_path, `${e.eid}.${e.url.split('.').pop()}`))) && !fs.existsSync((path.join(config.deepbooru_output_path, `${e.eid}.json`))))
-        while (downlaods.length !== 0) {
-            const toDo = downlaods.slice(0,10);
+        let downlaods = {}
+        messages.filter(e => !fs.existsSync((path.join(config.deepbooru_input_path, `${e.eid}.${e.url.split('.').pop()}`))) && !fs.existsSync((path.join(config.deepbooru_output_path, `${e.eid}.json`)))).map((e,i) => {
+            downlaods[i] = e
+        })
+        while (Object.keys(downlaods).length !== 0) {
+            let downloadKeys = Object.keys(downlaods).slice(0,8)
             console.log(`${downlaods.length} Left to download`)
-            await toDo.forEach(async (e,i) => {
+            await Promise.all(downloadKeys.map(async e => {
                 const fileExt = e.url.split('.').pop();
                 return await new Promise(ok => {
                     function getimageSizeParam() {
@@ -167,7 +170,7 @@
                         delete downlaods[i];
                     })
                 })
-            })
+            }))
         }
         await queryImageTags();
     }
