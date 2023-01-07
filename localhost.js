@@ -103,6 +103,7 @@
         const messages = (await sqlPromiseSafe(`SELECT attachment_name, channel, attachment_hash, eid, cache_proxy, sizeH, sizeW
                                                 FROM kanmi_records
                                                 WHERE attachment_hash IS NOT NULL
+                                                  AND (attachment_name LIKE '%.jp%_' OR attachment_name LIKE '%.jfif' OR attachment_name LIKE '%.png')
                                                   AND channel = ?
                                                   AND eid NOT IN (SELECT eid FROM sequenzia_index_matches)
                                                 ORDER BY eid DESC
