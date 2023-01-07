@@ -37,6 +37,8 @@
         })
     })
     console.log(`Loaded ${modelTags.size} tags from model`);
+    const badFiles = new Map();
+    const skippedEid = [];
 
 
     async function clearFolder(folderPath) {
@@ -106,6 +108,7 @@
                                                 WHERE attachment_hash IS NOT NULL
                                                   AND (attachment_name LIKE '%.jp%_' OR attachment_name LIKE '%.jfif' OR attachment_name LIKE '%.png' OR attachment_name LIKE '%.gif')
                                                   ${(whereClause) ? 'AND (' + whereClause + ')' : ''}
+                                                  AND (${skippedEid.map(e => 'eid != ' + e).join(' AND ')})
                                                   AND eid NOT IN (SELECT eid FROM sequenzia_index_matches)
                                                 ORDER BY eid DESC
                                                 LIMIT ?`, [config.pull_limit || 100], true)).rows.map(e => {
@@ -133,7 +136,7 @@
             console.log(`${Object.keys(downlaods).length} Left to download`)
             await Promise.all(downloadKeys.map(async k => {
                 const e = downlaods[k];
-                return await new Promise(ok => {
+                const results = await new Promise(ok => {
                     function getimageSizeParam() {
                         if (e.sizeH && e.sizeW && Discord_CDN_Accepted_Files.indexOf(e.attachment_name.split('.').pop().toLowerCase()) !== -1 && (e.sizeH > 512 || e.sizeW > 512)) {
                             let ih = 512;
@@ -211,6 +214,20 @@
                         delete downlaods[k];
                     })
                 })
+                if (!results) {
+                    if (badFiles.has(e.eid)) {
+                        let prev = badFiles.get(e.eid)
+                        if (prev <= 5) {
+                            prev++;
+                            badFiles.set(e.eid, prev);
+                        } else {
+                            skippedEid.push(e.eid);
+                        }
+                    } else {
+                        badFiles.set(e.eid, 0);
+                    }
+                }
+                return results;
             }))
         }
         return false;
