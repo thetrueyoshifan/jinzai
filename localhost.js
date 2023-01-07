@@ -72,7 +72,7 @@
     async function queryImageTags() {
         console.log('Processing images for tags...')
         return new Promise(async (resolve) => {
-            const startTime = Date.now()
+            const startTime = Date.now();
             (fs.readdirSync(config.deepbooru_input_path))
                 .filter(e => fs.existsSync(path.join(config.deepbooru_output_path, `${e.split('.')[0]}.json`)))
                 .map(e => fs.unlinkSync(path.resolve(deepbooru_input_path, e)))
