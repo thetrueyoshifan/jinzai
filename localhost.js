@@ -115,7 +115,9 @@
             }
         })
         console.log(messages.length)
-        let msgRequests = messages.filter(e => !fs.existsSync((path.join(config.deepbooru_input_path, `${e.eid}.${e.url.split('.').pop()}`)))).reduce((promiseChain, e, i, a) => {
+        let msgRequests = messages
+            .filter(e => !fs.existsSync((path.join(config.deepbooru_input_path, `${e.eid}.${e.url.split('.').pop()}`))) || !fs.existsSync((path.join(config.deepbooru_output_path, `${e.eid}.json`))))
+            .reduce((promiseChain, e, i, a) => {
             return promiseChain.then(() => new Promise(async(completed) => {
                 const fileExt = e.url.split('.').pop();
                 completed(await new Promise(ok => {
@@ -198,6 +200,6 @@
         .on('ready', function () {
             console.log("MIITS Results Watcher Ready!")
         });
-    //cron.schedule('45 * * * *', async () => { queryForTags(); });
+    cron.schedule(config.check_cron || '45 * * * *', queryForTags);
     await queryForTags();
 })()
