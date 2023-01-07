@@ -7,6 +7,7 @@
     const path = require('path');
     const chokidar = require('chokidar');
     const fileType = require('file-type');
+    const sharp = require('sharp');
     const request = require('request').defaults({ encoding: null, jar: true });
     const {sqlPromiseSafe, sqlPromiseSimple} = require("./utils/sqlClient");
     const Discord_CDN_Accepted_Files = ['jpg','jpeg','jfif','png','webp','gif'];
@@ -114,7 +115,7 @@
                 ...e
             }
         })
-        console.log(messages.length)
+        console.log(messages.length + ' attachments to tag!')
         let downlaods = {}
         const existingFiles = [
             ...new Set([
@@ -173,6 +174,18 @@
                                         fs.writeFileSync(path.join(config.deepbooru_input_path, `${e.eid}.${mime.ext}`), body);
                                         console.log(`Downloaded ${e.url}`)
                                         ok(true);
+                                    } else if (mime && mime.ext && ['gif', 'tiff'].indexOf(mime.ext) !== -1) {
+                                        sharp(body)
+                                            .toFormat('png')
+                                            .toFile(path.join(config.deepbooru_input_path, `${e.eid}.png`))
+                                            .then(({data, info}) => {
+                                                console.log(`Downloaded as PNG ${e.url}`)
+                                                ok(true);
+                                            })
+                                            .catch((err) => {
+                                                console.error(err);
+                                                ok(false);
+                                            });
                                     } else {
                                         console.error('Unsupported file, will be discarded! Please consider correcting file name');
                                         ok(false);
