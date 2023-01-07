@@ -8,7 +8,6 @@
     const chokidar = require('chokidar');
     const request = require('request').defaults({ encoding: null, jar: true });
     const {sqlPromiseSafe, sqlPromiseSimple} = require("./utils/sqlClient");
-    const {sendData} = require("./utils/mqAccess");
     const Discord_CDN_Accepted_Files = ['jpg','jpeg','jfif','png','webp','gif'];
 
     console.log("Reading tags from database...");
