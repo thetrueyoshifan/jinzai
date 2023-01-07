@@ -102,3 +102,8 @@ dist
 
 # TernJS port file
 .tern-port
+
+categories.json
+tags.txt
+config.json
+test/config.json

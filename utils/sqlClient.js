@@ -1,4 +1,4 @@
-let config = require('../config.json');
+let config = require('../test/config.json');
 if (process.env.DATABASE_HOST && process.env.DATABASE_HOST.trim().length > 0)
     config.sql_host = process.env.DATABASE_HOST.trim()
 if (process.env.DATABASE_NAME && process.env.DATABASE_NAME.trim().length > 0)
