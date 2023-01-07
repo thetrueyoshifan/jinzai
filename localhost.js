@@ -6,8 +6,7 @@
     const fs = require('fs');
     const path = require('path');
     const chokidar = require('chokidar');
-    const req = require('require-esm-in-cjs');
-    const fileType = req('file-type');
+    const fileType = require('detect-file-type');
     const sharp = require('sharp');
     const request = require('request').defaults({ encoding: null, jar: true });
     const {sqlPromiseSafe, sqlPromiseSimple} = require("./utils/sqlClient");
@@ -170,7 +169,7 @@
                         } else {
                             try {
                                 if (body && body.length > 100) {
-                                    const  mime = await fileType.fileTypeFromBuffer(body);
+                                    const  mime = await fileType.fromBuffer(body);
                                     if (mime && mime.ext && ['png', 'jpg', 'webp'].indexOf(mime.ext) !== -1) {
                                         fs.writeFileSync(path.join(config.deepbooru_input_path, `${e.eid}.${mime.ext}`), body);
                                         console.log(`Downloaded ${e.url}`)
