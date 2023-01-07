@@ -178,6 +178,7 @@
         }
         console.log('Starting MIITS Tagger...');
         await queryImageTags();
+        console.log('MIITS Tagger finished!');
         return false;
     }
     const resultsWatcher = chokidar.watch(config.deepbooru_output_path, {
@@ -220,6 +221,7 @@
             let r = true;
             if (whereClause) {
                 await config.search.map(async w => {
+                    console.log(`Searching for "${w}"...`)
                     const _r = await queryForTags(w);
                     if (!_r)
                         r = false;
