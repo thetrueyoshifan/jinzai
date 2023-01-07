@@ -87,7 +87,7 @@
             console.log(ddOptions.join(' '))
             const muginoMeltdown = spawn(((config.deepbooru_exec) ? config.deepbooru_exec : 'deepbooru'), ddOptions, { encoding: 'utf8' })
 
-            muginoMeltdown.stdout.on('data', (data) => console.log(data.toString().trim().split('\n').filter(e => e.trim().length > 1 && !e.trim().includes('===] '))))
+            muginoMeltdown.stdout.on('data', (data) => console.log(data.toString().trim().split('\n').filter(e => e.trim().length > 1 && !e.trim().includes('===] ')).join('\n')))
             muginoMeltdown.stderr.on('data', (data) => console.error(data.toString()));
             muginoMeltdown.on('close', (code, signal) => {
                 (fs.readdirSync(config.deepbooru_input_path))
