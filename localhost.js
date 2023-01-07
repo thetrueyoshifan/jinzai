@@ -1,7 +1,3 @@
-import fs from "fs";
-import config from "./config.json";
-import path from "path";
-
 (async () => {
     const config = require('./config.json');
     const md5 = require('md5');
