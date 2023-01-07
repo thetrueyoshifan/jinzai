@@ -241,8 +241,10 @@
             }
             if (r)
                 break;
-            console.log('Waiting for next run... Zzzzz')
+            console.log('More work to be done, no sleep!')
+
         }
+        console.log('Waiting for next run... Zzzzz')
         runTimer = setTimeout(parseUntilDone, 300000);
     }
     await parseUntilDone(config.search);
