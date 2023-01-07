@@ -13,6 +13,7 @@
     "mysql2": "^2.3.3",
     "node-cron": "^3.0.2",
     "request": "^2.88.2",
+    "require-esm-in-cjs": "^0.1.0",
     "sharp": "^0.31.3",
     "slash": "^5.0.0",
     "tostream": "^1.0.0"

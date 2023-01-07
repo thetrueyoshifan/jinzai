@@ -6,7 +6,8 @@
     const fs = require('fs');
     const path = require('path');
     const chokidar = require('chokidar');
-    const fileType = require('file-type');
+    const req = require('require-esm-in-cjs');
+    const fileType = req('file-type');
     const sharp = require('sharp');
     const request = require('request').defaults({ encoding: null, jar: true });
     const {sqlPromiseSafe, sqlPromiseSimple} = require("./utils/sqlClient");
