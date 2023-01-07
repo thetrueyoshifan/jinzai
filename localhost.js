@@ -75,7 +75,7 @@
             const startTime = Date.now();
             (fs.readdirSync(config.deepbooru_input_path))
                 .filter(e => fs.existsSync(path.join(config.deepbooru_output_path, `${e.split('.')[0]}.json`)))
-                .map(e => fs.unlinkSync(path.resolve(deepbooru_input_path, e)))
+                .map(e => fs.unlinkSync(path.resolve(config.deepbooru_input_path, e)))
             let ddOptions = ['evaluate', config.deepbooru_input_path, '--project-path', config.deepbooru_model_path, '--allow-folder', '--save-json', '--save-path', config.deepbooru_output_path, '--no-tag-output']
             if (config.deepbooru_gpu)
                 ddOptions.push('--allow-gpu')
@@ -87,7 +87,7 @@
             muginoMeltdown.on('close', (code, signal) => {
                 (fs.readdirSync(config.deepbooru_input_path))
                     .filter(e => fs.existsSync(path.join(config.deepbooru_output_path, `${e.split('.')[0]}.json`)))
-                    .map(e => fs.unlinkSync(path.resolve(deepbooru_input_path, e)))
+                    .map(e => fs.unlinkSync(path.resolve(config.deepbooru_input_path, e)))
                 if (code !== 0) {
                     console.error(`Mugino Meltdown! MIITS reported a error!`);
                     resolve(false)
