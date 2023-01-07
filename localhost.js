@@ -219,7 +219,7 @@
         while (true) {
             let r = true;
             if (whereClause) {
-                config.search.map(async w => {
+                await config.search.map(async w => {
                     const _r = await queryForTags(w);
                     if (!_r)
                         r = false;
