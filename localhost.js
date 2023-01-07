@@ -221,7 +221,7 @@
                     return promiseChain.then(() => new Promise(async (resolve) => {
                         console.log(`Searching for "${w}"...`)
                         const _r = await queryForTags(w);
-                        if (!_r)
+                        if (_r)
                             r = false;
                         resolve(true);
                     }))
