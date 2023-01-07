@@ -49,7 +49,7 @@
             console.log(err);
         }
     }
-    await clearFolder(config.deepbooru_input_path);
+    //await clearFolder(config.deepbooru_input_path);
     // On-The-Fly Tagging System (aka no wasted table space)
     async function addTagForEid(eid, name, rating = 0) {
         let tagId = 0;
