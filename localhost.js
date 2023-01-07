@@ -217,21 +217,24 @@
         while (true) {
             let noResults = 0;
             if (whereClause) {
-                let requests = whereClause.reduce((promiseChain, w) => {
-                    return promiseChain.then(() => new Promise(async (resolve) => {
-                        console.log(`Searching for "${w}"...`)
-                        const _r = await queryForTags(w);
-                        if (_r)
-                            noResults++;
-                        resolve(true);
-                    }))
-                }, Promise.resolve());
-                requests.then(async () => {
-                    if (noResults !== whereClause.length) {
-                        console.log('Search Jobs Completed!, Starting MIITS Tagger...');
-                        await queryImageTags();
-                        console.log('MIITS Tagger finished!');
-                    }
+                await new Promise(completed => {
+                    let requests = whereClause.reduce((promiseChain, w) => {
+                        return promiseChain.then(() => new Promise(async (resolve) => {
+                            console.log(`Searching for "${w}"...`)
+                            const _r = await queryForTags(w);
+                            if (_r)
+                                noResults++;
+                            resolve(true);
+                        }))
+                    }, Promise.resolve());
+                    requests.then(async () => {
+                        if (noResults !== whereClause.length) {
+                            console.log('Search Jobs Completed!, Starting MIITS Tagger...');
+                            await queryImageTags();
+                            console.log('MIITS Tagger finished!');
+                        }
+                        completed();
+                    })
                 })
             } else {
                 const _r = await queryForTags();
