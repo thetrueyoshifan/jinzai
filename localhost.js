@@ -121,7 +121,7 @@
         if (messages.length === 0)
             return true;
         while (Object.keys(downlaods).length !== 0) {
-            let downloadKeys = Object.keys(downlaods).slice(0,25)
+            let downloadKeys = Object.keys(downlaods).slice(0,config.parallel_downloads || 25)
             console.log(`${Object.keys(downlaods).length} Left to download`)
             await Promise.all(downloadKeys.map(async k => {
                 const e = downlaods[k];
