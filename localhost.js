@@ -70,35 +70,6 @@
     function updateTagsPairs(eid, tags) {
         return tags.map(async tag => await addTagForEid(eid, tag.name, tag.rating))
     }
-    async function queryImageTags() {
-        console.log('Processing images for tags...')
-        await new Promise(async (resolve) => {
-            const startTime = Date.now();
-            (fs.readdirSync(config.deepbooru_input_path))
-                .filter(e => fs.existsSync(path.join(config.deepbooru_output_path, `${e.split('.')[0]}.json`)))
-                .map(e => fs.unlinkSync(path.resolve(config.deepbooru_input_path, e)))
-            let ddOptions = ['evaluate', config.deepbooru_input_path, '--project-path', config.deepbooru_model_path, '--allow-folder', '--save-json', '--save-path', config.deepbooru_output_path, '--no-tag-output']
-            if (config.deepbooru_gpu)
-                ddOptions.push('--allow-gpu')
-            console.log(ddOptions.join(' '))
-            const muginoMeltdown = spawn(((config.deepbooru_exec) ? config.deepbooru_exec : 'deepbooru'), ddOptions, { encoding: 'utf8' })
-
-            muginoMeltdown.stdout.on('data', (data) => console.log(data.toString()))
-            muginoMeltdown.stderr.on('data', (data) => console.error(data.toString()));
-            muginoMeltdown.on('close', (code, signal) => {
-                (fs.readdirSync(config.deepbooru_input_path))
-                    .filter(e => fs.existsSync(path.join(config.deepbooru_output_path, `${e.split('.')[0]}.json`)))
-                    .map(e => fs.unlinkSync(path.resolve(config.deepbooru_input_path, e)))
-                if (code !== 0) {
-                    console.error(`Mugino Meltdown! MIITS reported a error!`);
-                    resolve(false)
-                } else {
-                    console.log(`Tagging Completed in ${((Date.now() - startTime) / 1000).toFixed(0)} sec!`);
-                    resolve(true)
-                }
-            })
-        })
-    }
     async function queryForTags(whereClause) {
         const messages = (await sqlPromiseSafe(`SELECT attachment_name, channel, attachment_hash, eid, cache_proxy, sizeH, sizeW
                                                 FROM kanmi_records
@@ -177,7 +148,33 @@
             }))
         }
         console.log('Starting MIITS Tagger...');
-        await queryImageTags();
+        console.log('Processing images for tags...')
+        await new Promise(async (resolve) => {
+            const startTime = Date.now();
+            (fs.readdirSync(config.deepbooru_input_path))
+                .filter(e => fs.existsSync(path.join(config.deepbooru_output_path, `${e.split('.')[0]}.json`)))
+                .map(e => fs.unlinkSync(path.resolve(config.deepbooru_input_path, e)))
+            let ddOptions = ['evaluate', config.deepbooru_input_path, '--project-path', config.deepbooru_model_path, '--allow-folder', '--save-json', '--save-path', config.deepbooru_output_path, '--no-tag-output']
+            if (config.deepbooru_gpu)
+                ddOptions.push('--allow-gpu')
+            console.log(ddOptions.join(' '))
+            const muginoMeltdown = spawn(((config.deepbooru_exec) ? config.deepbooru_exec : 'deepbooru'), ddOptions, { encoding: 'utf8' })
+
+            muginoMeltdown.stdout.on('data', (data) => console.log(data.toString()))
+            muginoMeltdown.stderr.on('data', (data) => console.error(data.toString()));
+            muginoMeltdown.on('close', (code, signal) => {
+                (fs.readdirSync(config.deepbooru_input_path))
+                    .filter(e => fs.existsSync(path.join(config.deepbooru_output_path, `${e.split('.')[0]}.json`)))
+                    .map(e => fs.unlinkSync(path.resolve(config.deepbooru_input_path, e)))
+                if (code !== 0) {
+                    console.error(`Mugino Meltdown! MIITS reported a error!`);
+                    resolve(false)
+                } else {
+                    console.log(`Tagging Completed in ${((Date.now() - startTime) / 1000).toFixed(0)} sec!`);
+                    resolve(true)
+                }
+            })
+        })
         return false;
     }
     const resultsWatcher = chokidar.watch(config.deepbooru_output_path, {
