@@ -220,11 +220,17 @@
         while (true) {
             let r = true;
             if (whereClause) {
-                await config.search.map(async w => {
-                    console.log(`Searching for "${w}"...`)
-                    const _r = await queryForTags(w);
-                    if (!_r)
-                        r = false;
+                let requests = config.search.reduce((promiseChain, w) => {
+                    return promiseChain.then(() => new Promise(async (resolve) => {
+                        console.log(`Searching for "${w}"...`)
+                        const _r = await queryForTags(w);
+                        if (!_r)
+                            r = false;
+                        resolve(true);
+                    }))
+                }, Promise.resolve());
+                requests.then(() => {
+                    console.log(`Search Jobs Completed!`);
                 })
             } else {
                 r = await queryForTags();
