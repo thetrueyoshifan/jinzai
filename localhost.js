@@ -108,7 +108,7 @@
                                                 WHERE attachment_hash IS NOT NULL
                                                   AND (attachment_name LIKE '%.jp%_' OR attachment_name LIKE '%.jfif' OR attachment_name LIKE '%.png' OR attachment_name LIKE '%.gif')
                                                   ${(whereClause) ? 'AND (' + whereClause + ')' : ''}
-                                                  AND (${skippedEid.map(e => 'eid != ' + e).join(' AND ')})
+                                                 ${(skippedEid.length > 0) ? ' AND (' + skippedEid.map(e => 'eid != ' + e).join(' AND ') + ')' : ''}
                                                   AND eid NOT IN (SELECT eid FROM sequenzia_index_matches)
                                                 ORDER BY eid DESC
                                                 LIMIT ?`, [config.pull_limit || 100], true)).rows.map(e => {
