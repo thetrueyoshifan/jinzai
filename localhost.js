@@ -121,7 +121,8 @@
         while (Object.keys(downlaods).length !== 0) {
             let downloadKeys = Object.keys(downlaods).slice(0,8)
             console.log(`${downlaods.length} Left to download`)
-            await Promise.all(downloadKeys.map(async e => {
+            await Promise.all(downloadKeys.map(async k => {
+                const e = downlaods[k];
                 const fileExt = e.url.split('.').pop();
                 return await new Promise(ok => {
                     function getimageSizeParam() {
@@ -167,7 +168,7 @@
                                 ok(false);
                             }
                         }
-                        delete downlaods[i];
+                        delete downlaods[k];
                     })
                 })
             }))
