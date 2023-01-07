@@ -48,6 +48,7 @@
             console.log(err);
         }
     }
+    await clearFolder(config.deepbooru_input_path);
     // On-The-Fly Tagging System (aka no wasted table space)
     async function addTagForEid(eid, name, rating = 0) {
         let tagId = 0;
@@ -72,16 +73,21 @@
         console.log('Processing images for tags...')
         return new Promise(async (resolve) => {
             const startTime = Date.now()
+            (fs.readdirSync(config.deepbooru_input_path))
+                .filter(e => fs.existsSync(path.join(config.deepbooru_output_path, `${e.split('.')[0]}.json`)))
+                .map(e => fs.unlinkSync(path.resolve(deepbooru_input_path, e)))
             let ddOptions = ['evaluate', config.deepbooru_input_path, '--project-path', config.deepbooru_model_path, '--allow-folder', '--save-json', '--save-path', config.deepbooru_output_path, '--no-tag-output']
             if (config.deepbooru_gpu)
                 ddOptions.push('--allow-gpu')
             console.log(ddOptions.join(' '))
-            await clearFolder(config.deepbooru_input_path);
             const muginoMeltdown = spawn(((config.deepbooru_exec) ? config.deepbooru_exec : 'deepbooru'), ddOptions, { encoding: 'utf8' })
 
             muginoMeltdown.stdout.on('data', (data) => console.log(data.toString()))
             muginoMeltdown.stderr.on('data', (data) => console.error(data.toString()));
             muginoMeltdown.on('close', (code, signal) => {
+                (fs.readdirSync(config.deepbooru_input_path))
+                    .filter(e => fs.existsSync(path.join(config.deepbooru_output_path, `${e.split('.')[0]}.json`)))
+                    .map(e => fs.unlinkSync(path.resolve(deepbooru_input_path, e)))
                 if (code !== 0) {
                     console.error(`Mugino Meltdown! MIITS reported a error!`);
                     resolve(false)
@@ -169,6 +175,7 @@
                             const r = tagResults[k];
                             await addTagForEid(e.eid, k, r);
                         });
+                        fs.unlinkSync(jsonFilePath);
                         completed(true);
                     } else {
                         console.error(`Entity ${e.eid} has no resulting JSON file! Maybe something went wrong withs MIITS`);
