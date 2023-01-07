@@ -1,4 +1,4 @@
-const config = require('../test/config.json')
+const config = require('./config.json')
 const graylog2 = require("graylog2");
 const colors = require('colors');
 const {hostname} = require("os");
