@@ -6,6 +6,7 @@
     const fs = require('fs');
     const path = require('path');
     const chokidar = require('chokidar');
+    const fileType = require('file-type');
     const request = require('request').defaults({ encoding: null, jar: true });
     const {sqlPromiseSafe, sqlPromiseSimple} = require("./utils/sqlClient");
     const Discord_CDN_Accepted_Files = ['jpg','jpeg','jfif','png','webp','gif'];
@@ -115,7 +116,13 @@
         })
         console.log(messages.length)
         let downlaods = {}
-        messages.filter(e => !fs.existsSync((path.join(config.deepbooru_input_path, `${e.eid}.${e.url.split('.').pop()}`))) && !fs.existsSync((path.join(config.deepbooru_output_path, `${e.eid}.json`)))).map((e,i) => {
+        const existingFiles = [
+            ...new Set([
+                ...fs.readdirSync(config.deepbooru_input_path).map(e => e.split('.')[0]),
+                ...fs.readdirSync(config.deepbooru_output_path).map(e => e.split('.')[0])
+            ])
+        ]
+        messages.filter(e => existingFiles.indexOf(e.eid.toString()) === -1).map((e,i) => {
             downlaods[i] = e
         })
         if (messages.length === 0)
@@ -125,7 +132,6 @@
             console.log(`${Object.keys(downlaods).length} Left to download`)
             await Promise.all(downloadKeys.map(async k => {
                 const e = downlaods[k];
-                const fileExt = e.url.split('.').pop();
                 return await new Promise(ok => {
                     function getimageSizeParam() {
                         if (e.sizeH && e.sizeW && Discord_CDN_Accepted_Files.indexOf(e.attachment_name.split('.').pop().toLowerCase()) !== -1 && (e.sizeH > 512 || e.sizeW > 512)) {
@@ -156,15 +162,21 @@
                             'upgrade-insecure-requests': '1',
                             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.131 Safari/537.36 Edg/92.0.902.73'
                         },
-                    }, function (err, res, body) {
+                    }, async function (err, res, body) {
                         if (err) {
                             ok(null)
                         } else {
                             try {
                                 if (body && body.length > 100) {
-                                    fs.writeFileSync(path.join(config.deepbooru_input_path, `${e.eid}.${fileExt}`), body);
-                                    ok(true);
-                                    console.log(`Downloaded ${e.url}`)
+                                    const  mime = await fileType.fileTypeFromBuffer(body);
+                                    if (mime && mime.ext && ['png', 'jpg', 'webp'].indexOf(mime.ext) !== -1) {
+                                        fs.writeFileSync(path.join(config.deepbooru_input_path, `${e.eid}.${mime.ext}`), body);
+                                        console.log(`Downloaded ${e.url}`)
+                                        ok(true);
+                                    } else {
+                                        console.error('Unsupported file, will be discarded! Please consider correcting file name');
+                                        ok(false);
+                                    }
                                 } else {
                                     console.error(`Download failed, File size to small: ${e.url}`);
                                     ok(false);
