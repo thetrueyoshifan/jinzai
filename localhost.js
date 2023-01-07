@@ -192,7 +192,8 @@
                 await addTagForEid(eid, k, r);
             });
             fs.unlinkSync(jsonFilePath);
-        })
+            fs.unlinkSync(path.join(config.deepbooru_input_path, (fs.readdirSync(config.deepbooru_input_path).filter(k => k.split('.')[0] === eid).pop())));
+        });
         .on('error', function (error) {
             console.error(error);
         })
