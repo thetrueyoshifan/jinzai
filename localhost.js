@@ -156,7 +156,7 @@
             }
         }
         const sqlOrderBy = (analyzerGroup && analyzerGroup.order) ? analyzerGroup.order :'eid DESC'
-        const query = `SELECT ${sqlFields.join(', ')} FROM ${sqlTables.join(', ')} WHERE (${sqlWhereBase.join(' AND ')} AND (${sqlWhereFiletypes.join(' OR ')}))${(sqlWhereFilter.length > 0) ? ' AND (' + sqlWhereFilter.join(' AND ') + ')' : ''}${(skippedEid.length > 0) ? ' AND (' + skippedEid.map(e => 'eid != ' + e).join(' AND ') + ')' : ''} ORDER BY ${sqlOrderBy} LIMIT ${analyzerGroup.limit || 100}`
+        const query = `SELECT ${sqlFields.join(', ')} FROM ${sqlTables.join(', ')} WHERE (${sqlWhereBase.join(' AND ')} AND (${sqlWhereFiletypes.join(' OR ')}))${(sqlWhereFilter.length > 0) ? ' AND (' + sqlWhereFilter.join(' AND ') + ')' : ''}${(skippedEid.length > 0) ? ' AND (' + skippedEid.map(e => 'eid != ' + e).join(' AND ') + ')' : ''} ORDER BY ${sqlOrderBy} LIMIT ${(analyzerGroup && analyzerGroup.limit) ? analyzerGroup.limit : 100}`
         console.log(query);
 
         const messages = (await sqlPromiseSafe(query, true)).rows.map(e => {
