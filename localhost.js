@@ -136,23 +136,23 @@
             sqlWhereFilter.push('analyzerGroup.query')
         } else {
             if (analyzerGroup && analyzerGroup.channels) {
-                sqlWhereFilter.push('(' + analyzerGroup.channels.map(h => `kanmi_records.channel = ${h}`).join(' OR ') + ')');
+                sqlWhereFilter.push('(' + analyzerGroup.channels.map(h => `kanmi_records.channel = '${h}'`).join(' OR ') + ')');
             }
             if (analyzerGroup && analyzerGroup.servers) {
-                sqlWhereFilter.push('(' + analyzerGroup.servers.map(h => `kanmi_records.server = ${h}`).join(' OR ') + ')');
+                sqlWhereFilter.push('(' + analyzerGroup.servers.map(h => `kanmi_records.server = '${h}'`).join(' OR ') + ')');
             }
             if (analyzerGroup && analyzerGroup.content) {
                 sqlWhereFilter.push('(' + analyzerGroup.content.map(h => `kanmi_records.content_full LIKE '%${h}%'`).join(' OR ') + ')');
             }
 
             if (analyzerGroup && analyzerGroup.parent) {
-                sqlWhereFilter.push('(' + analyzerGroup.parent.map(h => `kanmi_channels.parent = ${h}`).join(' OR ') + ')');
+                sqlWhereFilter.push('(' + analyzerGroup.parent.map(h => `kanmi_channels.parent = '${h}'`).join(' OR ') + ')');
             }
             if (analyzerGroup && analyzerGroup.class) {
-                sqlWhereFilter.push('(' + analyzerGroup.class.map(h => `kanmi_channels.classification = ${h}`).join(' OR ') + ')');
+                sqlWhereFilter.push('(' + analyzerGroup.class.map(h => `kanmi_channels.classification = '${h}'`).join(' OR ') + ')');
             }
             if (analyzerGroup && analyzerGroup.vcid) {
-                sqlWhereFilter.push('(' + analyzerGroup.vcid.map(h => `kanmi_channels.virtual_cid = ${h}`).join(' OR ') + ')');
+                sqlWhereFilter.push('(' + analyzerGroup.vcid.map(h => `kanmi_channels.virtual_cid = '${h}'`).join(' OR ') + ')');
             }
         }
         const sqlOrderBy = (analyzerGroup && analyzerGroup.order) ? analyzerGroup.order :'eid DESC'
@@ -322,7 +322,7 @@
                 await new Promise(completed => {
                     let requests = analyzerGroups.reduce((promiseChain, w) => {
                         return promiseChain.then(() => new Promise(async (resolve) => {
-                            console.log(`Searching for "${w}"...`)
+                            console.log(`Searching for "${JSON.stringify(w)}"...`)
                             const _r = await queryForTags(w);
                             if (_r)
                                 noResults++;
