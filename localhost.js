@@ -251,7 +251,7 @@
             const jsonFilePath = path.resolve(filePath)
             const tagResults = JSON.parse(fs.readFileSync(jsonFilePath).toString());
             console.error(`Entity ${eid} has ${Object.keys(tagResults).length} tags!`);
-            await sqlPromiseSafe(`UPDATE kanmi_records SET tags = ? WHERE eid = ?`, [ Object.keys(tagResults).map(k => `${modelTags.get(k) || 0}/${tagResults[k]}/${k}`).join('; '), eid ])
+            await sqlPromiseSafe(`UPDATE kanmi_records SET tags = ? WHERE eid = ?`, [ Object.keys(tagResults).map(k => `${modelTags.get(k) || 0}/${tagResults[k].toFixed(4)}/${k}`).join('; '), eid ])
             Object.keys(tagResults).map(async k => {
                 const r = tagResults[k];
                 await addTagForEid(eid, k, r);
