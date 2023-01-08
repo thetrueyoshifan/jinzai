@@ -104,16 +104,62 @@
             })
         })
     }
-    async function queryForTags(whereClause) {
-        const messages = (await sqlPromiseSafe(`SELECT attachment_name, channel, attachment_hash, eid, cache_proxy, sizeH, sizeW
-                                                FROM kanmi_records
-                                                WHERE attachment_hash IS NOT NULL
-                                                  AND (attachment_name LIKE '%.jp%_' OR attachment_name LIKE '%.jfif' OR attachment_name LIKE '%.png' OR attachment_name LIKE '%.gif')
-                                                  ${(whereClause) ? 'AND (' + whereClause + ')' : ''}
-                                                 ${(skippedEid.length > 0) ? ' AND (' + skippedEid.map(e => 'eid != ' + e).join(' AND ') + ')' : ''}
-                                                  AND eid NOT IN (SELECT eid FROM sequenzia_index_matches)
-                                                ORDER BY eid DESC
-                                                LIMIT ?`, [config.pull_limit || 100], true)).rows.map(e => {
+    async function queryForTags(analyzerGroup) {
+        const sqlFields = [
+            'kanmi_records.eid',
+            'kanmi_records.channel',
+            'kanmi_records.attachment_name',
+            'kanmi_records.attachment_hash',
+            'kanmi_records.cache_proxy',
+            'kanmi_records.sizeH',
+            'kanmi_records.sizeW',
+        ]
+        const sqlTables = [
+            'kanmi_records',
+            'kanmi_channels',
+        ]
+        const sqlWhereBase = [
+            'kanmi_records.channel = kanmi_channels.channelid',
+            'kanmi_records.attachment_hash IS NOT NULL',
+            'kanmi_records.attachment_name IS NOT NULL',
+            'kanmi_records.attachment_extra IS NULL',
+            'eid NOT IN (SELECT eid FROM sequenzia_index_matches)',
+        ]
+        const sqlWhereFiletypes = [
+            "kanmi_records.attachment_name LIKE '%.jp%_'",
+            "kanmi_records.attachment_name LIKE '%.jfif'",
+            "kanmi_records.attachment_name LIKE '%.png'",
+            "kanmi_records.attachment_name LIKE '%.gif'",
+        ]
+        let sqlWhereFilter = [];
+        if (analyzerGroup && analyzerGroup.query) {
+            sqlWhereFilter.push('analyzerGroup.query')
+        } else {
+            if (analyzerGroup && analyzerGroup.channels) {
+                sqlWhereFilter.push('(' + analyzerGroup.channels.map(h => `kanmi_records.channel = ${h}`).join(' OR ') + ')');
+            }
+            if (analyzerGroup && analyzerGroup.servers) {
+                sqlWhereFilter.push('(' + analyzerGroup.servers.map(h => `kanmi_records.server = ${h}`).join(' OR ') + ')');
+            }
+            if (analyzerGroup && analyzerGroup.content) {
+                sqlWhereFilter.push('(' + analyzerGroup.content.map(h => `kanmi_records.content_full LIKE '%${h}%'`).join(' OR ') + ')');
+            }
+
+            if (analyzerGroup && analyzerGroup.parent) {
+                sqlWhereFilter.push('(' + analyzerGroup.parent.map(h => `kanmi_channels.parent = ${h}`).join(' OR ') + ')');
+            }
+            if (analyzerGroup && analyzerGroup.class) {
+                sqlWhereFilter.push('(' + analyzerGroup.class.map(h => `kanmi_channels.classification = ${h}`).join(' OR ') + ')');
+            }
+            if (analyzerGroup && analyzerGroup.vcid) {
+                sqlWhereFilter.push('(' + analyzerGroup.vcid.map(h => `kanmi_channels.virtual_cid = ${h}`).join(' OR ') + ')');
+            }
+        }
+        const sqlOrderBy = (analyzerGroup && analyzerGroup.order) ? analyzerGroup.order :'eid DESC'
+        const query = `SELECT ${sqlFields.join(', ')} FROM ${sqlTables.join(', ')} WHERE (${sqlWhereBase.join(' AND ')} AND (${sqlWhereFiletypes.join(' OR ')}))${(sqlWhereFilter.length > 0) ? ' AND (' + sqlWhereFilter.join(' AND ') + ')' : ''}${(skippedEid.length > 0) ? ' AND (' + skippedEid.map(e => 'eid != ' + e).join(' AND ') + ')' : ''} ORDER BY ${sqlOrderBy} LIMIT ${analyzerGroup.limit || 100}`
+        console.log(query);
+
+        const messages = (await sqlPromiseSafe(query, true)).rows.map(e => {
             const url = (( e.cache_proxy) ? e.cache_proxy.startsWith('http') ? e.cache_proxy : `https://media.discordapp.net/attachments${e.cache_proxy}` : (e.attachment_hash && e.attachment_name) ? `https://media.discordapp.net/attachments/` + ((e.attachment_hash.includes('/')) ? e.attachment_hash : `${e.channel}/${e.attachment_hash}/${e.attachment_name}`) : undefined) + '';
             return {
                 url,
@@ -180,15 +226,15 @@
                                                 console.log(err);
                                                 ext(null);
                                             } else {
-                                                ext(result.ext);
+                                                ext(result);
                                             }
                                         });
                                     })
-                                    if (mime && ['png', 'jpg', 'webp'].indexOf(mime) !== -1) {
-                                        fs.writeFileSync(path.join(config.deepbooru_input_path, `${e.eid}.${mime}`), body);
+                                    if (mime.ext && ['png', 'jpg'].indexOf(mime.ext) !== -1) {
+                                        fs.writeFileSync(path.join(config.deepbooru_input_path, `${e.eid}.${mime.ext}`), body);
                                         console.log(`Downloaded ${e.url}`)
                                         ok(true);
-                                    } else if (mime && ['gif', 'tiff'].indexOf(mime) !== -1) {
+                                    } else if (mime.ext && ['gif', 'tiff', 'webp'].indexOf(mime.ext) !== -1) {
                                         await sharp(body)
                                             .toFormat('png')
                                             .toFile(path.join(config.deepbooru_input_path, `${e.eid}.png`), (err, info) => {
@@ -269,12 +315,12 @@
         });
 
     let runTimer = null;
-    async function parseUntilDone(whereClause) {
+    async function parseUntilDone(analyzerGroups) {
         while (true) {
             let noResults = 0;
-            if (whereClause) {
+            if (analyzerGroups) {
                 await new Promise(completed => {
-                    let requests = whereClause.reduce((promiseChain, w) => {
+                    let requests = analyzerGroups.reduce((promiseChain, w) => {
                         return promiseChain.then(() => new Promise(async (resolve) => {
                             console.log(`Searching for "${w}"...`)
                             const _r = await queryForTags(w);
@@ -284,7 +330,7 @@
                         }))
                     }, Promise.resolve());
                     requests.then(async () => {
-                        if (noResults !== whereClause.length) {
+                        if (noResults !== analyzerGroups.length) {
                             console.log('Search Jobs Completed!, Starting MIITS Tagger...');
                             await queryImageTags();
                             console.log('MIITS Tagger finished!');
@@ -300,7 +346,7 @@
                 await queryImageTags();
                 console.log('MIITS Tagger finished!');
             }
-            if ((whereClause && noResults === whereClause.length) || (!whereClause && noResults === 1))
+            if ((analyzerGroups && noResults === analyzerGroups.length) || (!analyzerGroups && noResults === 1))
                 break;
             console.log('More work to be done, no sleep!');
         }
