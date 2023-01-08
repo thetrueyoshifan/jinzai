@@ -133,7 +133,7 @@
         ]
         let sqlWhereFilter = [];
         if (analyzerGroup && analyzerGroup.query) {
-            sqlWhereFilter.push('analyzerGroup.query')
+            sqlWhereFilter.push(analyzerGroup.query)
         } else {
             if (analyzerGroup && analyzerGroup.channels) {
                 sqlWhereFilter.push('(' + analyzerGroup.channels.map(h => `kanmi_records.channel = '${h}'`).join(' OR ') + ')');
