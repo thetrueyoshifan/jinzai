@@ -123,7 +123,7 @@
             'kanmi_records.attachment_hash IS NOT NULL',
             'kanmi_records.attachment_name IS NOT NULL',
             'kanmi_records.attachment_extra IS NULL',
-            'kanmi_records.tags IS NULL;',
+            'kanmi_records.tags IS NULL',
         ]
         const sqlWhereFiletypes = [
             "kanmi_records.attachment_name LIKE '%.jp%_'",
