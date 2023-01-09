@@ -123,7 +123,7 @@
             'kanmi_records.attachment_hash IS NOT NULL',
             'kanmi_records.attachment_name IS NOT NULL',
             'kanmi_records.attachment_extra IS NULL',
-            'eid NOT IN (SELECT eid FROM sequenzia_index_matches)',
+            'kanmi_records.tags IS NULL;',
         ]
         const sqlWhereFiletypes = [
             "kanmi_records.attachment_name LIKE '%.jp%_'",
@@ -270,6 +270,7 @@
                             badFiles.set(e.eid, prev);
                         } else {
                             skippedEid.push(e.eid);
+                            await sqlPromiseSafe(`UPDATE kanmi_records SET tags = ? WHERE eid = ?`, [ '3/1/cant_tag;', e.eid ])
                         }
                     } else {
                         badFiles.set(e.eid, 0);

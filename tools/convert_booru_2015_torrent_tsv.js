@@ -35,7 +35,7 @@
                 tags_table[booru_id[entry.BOORU]] = [];
             if (!tags_table[booru_id[entry.BOORU]][parseInt(entry.FID)])
                 tags_table[booru_id[entry.BOORU]][parseInt(entry.FID)] = [];
-            if (entry.TAG_CAT !== 4) {
+            if (entry.TAG_CAT !== 4 && entry.TAG_CAT !== 1 && entry.TAG_CAT !== 2) {
                 tags_table[booru_id[entry.BOORU]][parseInt(entry.FID)].push(entry.TAG.trim())
             }
         })
@@ -72,12 +72,14 @@
     //const db = new sqlite3.Database(':memory:');
     const db = new sqlite3.Database('./../../BOORU_2015/danbooru.sqlite');
     db.serialize(() => {
-        db.run(`DROP TABLE IF EXISTS posts`);
-        db.run("CREATE TABLE posts (id INTEGER, md5 TEXT, file_ext TEXT, tag_string TEXT, tag_count_general INTEGER)");
+        //db.run(`DROP TABLE IF EXISTS posts`);
+        db.run("CREATE TABLE IF NOT EXISTS posts (id INTEGER, md5 TEXT, file_ext TEXT, tag_string TEXT, tag_count_general INTEGER)");
 
-        const stmt = db.prepare("INSERT INTO posts VALUES (?,?,?,?,?)");
+        const stmt = db.prepare("INSERT INTO posts VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE tag_string = ?, tag_count_general = ?");
         const booru_list = Object.keys(dataset_results);
         console.log('Complete Createing Database!')
+        if (!fs.existsSync(`./../../BOORU_2015/images/`))
+            fs.mkdirSync(`./../../BOORU_2015/images/`)
 
         for (let booru of booru_list) {
             const booru_posts = dataset_results[booru];
@@ -86,12 +88,16 @@
             for (let fileid of Object.keys(booru_posts)) {
                 const file = booru_posts[fileid];
                 try {
-                    stmt.run(parseInt(fileid), file.md5, file.name.split(".").pop(), booru_tags[parseInt(fileid)].join(' '), file.general_count);
-                    if (!fs.existsSync(`./../../BOORU_2015/${file.md5.substring(0,2)}/`))
-                        fs.mkdirSync(`./../../BOORU_2015/${file.md5.substring(0,2)}/`)
-                    fs_extra.moveSync(`./../../BOORU_2015/${file.path.split('\\')[0]}/${file.name}`, `./../../BOORU_2015/${file.md5.substring(0,2)}/${file.md5}.${file.name.split(".").pop()}`);
+                    if (fs.existsSync(`./../../BOORU_2015/${file.path.split('\\')[0]}/${file.name}`)) {
+                        if (!fs.existsSync(`./../../BOORU_2015/images/${file.md5.substring(0, 2)}/`))
+                            fs.mkdirSync(`./../../BOORU_2015/images/${file.md5.substring(0, 2)}/`)
+                        fs_extra.moveSync(`./../../BOORU_2015/${file.path.split('\\')[0]}/${file.name}`, `./../../BOORU_2015/images/${file.md5.substring(0, 2)}/${file.md5}.${file.name.split(".").pop()}`);
+                        stmt.run(parseInt(fileid), file.md5, file.name.split(".").pop(), booru_tags[parseInt(fileid)].join(' '), file.general_count, booru_tags[parseInt(fileid)].join(' '), file.general_count);
+                    }
+
                 } catch (err) {
                     console.error(fileid + ' from ' + booru + ' no tags!')
+                    console.error(err);
                 }
             }
 
@@ -103,7 +109,7 @@
             console.log(row);
         });
     });
-    db.close();
+    await db.close();
     console.log('Complete!')
 })()
 
