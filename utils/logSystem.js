@@ -15,7 +15,7 @@ if (config.log_host && config.log_host.length > 0) {
         logger1 = new graylog2.graylog({
             servers: [config.log_host[0]],
             hostname: hostname(), // the name of this host
-            facility: 'Sequenzia-Server',     // the facility for these log messages
+            facility: 'Mugino-Controller',     // the facility for these log messages
             bufferSize: 1350         // max UDP packet size, should never exceed the
                                      // MTU of your system (optional, default: 1400)
         });
@@ -29,7 +29,7 @@ if (config.log_host && config.log_host.length > 0) {
         logger2 = new graylog2.graylog({
             servers: [config.log_host[1]],
             hostname: hostname(), // the name of this host
-            facility: 'Sequenzia-Server',     // the facility for these log messages
+            facility: 'Mugino-Controller',     // the facility for these log messages
             bufferSize: 1350         // max UDP packet size, should never exceed the
                                      // MTU of your system (optional, default: 1400)
         });
