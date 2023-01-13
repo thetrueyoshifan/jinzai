@@ -232,6 +232,7 @@
                                     if (mime.ext && ['png', 'jpg'].indexOf(mime.ext) !== -1) {
                                         fs.writeFileSync(path.join(config.deepbooru_input_path, `${e.eid}.${mime.ext}`), body);
                                         ok(true);
+                                        badFiles.delete(e.eid);
                                     } else if (mime.ext && ['gif', 'tiff', 'webp'].indexOf(mime.ext) !== -1) {
                                         await sharp(body)
                                             .toFormat('png')
@@ -242,6 +243,7 @@
                                                 } else {
                                                     //console.log(`Downloaded as PNG ${e.url}`)
                                                     ok(true);
+                                                    badFiles.delete(e.eid);
                                                 }
                                             })
                                     } else {
@@ -260,7 +262,6 @@
                         }
                         delete downlaods[k];
                     })
-                    badFiles.delete(e.eid);
                 })
                 if (!results) {
                     if (badFiles.has(e.eid)) {
