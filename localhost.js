@@ -175,7 +175,7 @@
                 return ''
             }
         }
-            const url = (( e.cache_proxy) ? e.cache_proxy.startsWith('http') ? e.cache_proxy : `https://${(config.no_media_cdn || (badFiles.has(e.eid) && (badFiles.get(e.eid)) >= 2)) ? 'cdn.discordapp.com' : 'media.discordapp.net'}/attachments${e.cache_proxy}` : (e.attachment_hash && e.attachment_name) ? `https://media.discordapp.net/attachments/` + ((e.attachment_hash.includes('/')) ? e.attachment_hash : `${e.channel}/${e.attachment_hash}/${e.attachment_name}${(config.no_media_cdn || (badFiles.has(e.eid) && badFiles.get(e.eid) >= 2)) ? '' : getimageSizeParam()}`) : undefined) + '';
+            const url = (( e.cache_proxy) ? e.cache_proxy.startsWith('http') ? e.cache_proxy : `https://${(config.no_media_cdn || (badFiles.has(e.eid) && (badFiles.get(e.eid)) >= 2)) ? 'cdn.discordapp.com' : 'media.discordapp.net'}/attachments${e.cache_proxy}` : (e.attachment_hash && e.attachment_name) ? `https://media.discordapp.net/attachments/` + ((e.attachment_hash.includes('/')) ? e.attachment_hash : `${e.channel}/${e.attachment_hash}/${e.attachment_name}${(config.no_media_cdn || (badFiles.has(e.eid) && (badFiles.get(e.eid)) >= 2)) ? '' : getimageSizeParam()}`) : undefined) + '';
             return { url, ...e };
         })
         console.log(messages.length + ' items need to be tagged!')
@@ -229,11 +229,11 @@
                                             }
                                         });
                                     })
-                                    if (mime.ext && ['png', 'jpg'].indexOf(mime.ext) !== -1) {
+                                    if (config.allow_direct_write && mime.ext && ['png', 'jpg'].indexOf(mime.ext) !== -1) {
                                         fs.writeFileSync(path.join(config.deepbooru_input_path, `${e.eid}.${mime.ext}`), body);
                                         ok(true);
                                         badFiles.delete(e.eid);
-                                    } else if (mime.ext && ['gif', 'tiff', 'webp'].indexOf(mime.ext) !== -1) {
+                                    } else if ((!config.allow_direct_write && mime.ext && ['png', 'jpg', 'gif', 'tiff', 'webp'].indexOf(mime.ext) !== -1) || (mime.ext && ['gif', 'tiff', 'webp'].indexOf(mime.ext) !== -1)) {
                                         await sharp(body)
                                             .toFormat('png')
                                             .toFile(path.join(config.deepbooru_input_path, `${e.eid}.png`), (err, info) => {
