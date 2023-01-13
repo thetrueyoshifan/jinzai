@@ -38,7 +38,6 @@
     })
     console.log(`Loaded ${modelTags.size} tags from model`);
     const badFiles = new Map();
-    const skippedEid = [];
 
 
     async function clearFolder(folderPath) {
@@ -69,10 +68,6 @@
             parseInt(eid.toString() + tagId.toString()),
             eid, tagId, rating, rating
         ])
-    }
-    async function updateTagsPairs(eid, tags) {
-        await sqlPromiseSafe(`UPDATE kanmi_records SET tags = ? WHERE eid = ?`, [ tags.map(t => `${modelTags.get(name) || 0}/${t.rating}/${t.name}`).join('; '), eid ])
-        return await tags.map(async tag => await addTagForEid(eid, tag.name, tag.rating))
     }
     async function queryImageTags() {
         console.log('Processing images for tags...')
@@ -156,11 +151,11 @@
             }
         }
         const sqlOrderBy = (analyzerGroup && analyzerGroup.order) ? analyzerGroup.order :'eid DESC'
-        const query = `SELECT ${sqlFields.join(', ')} FROM ${sqlTables.join(', ')} WHERE (${sqlWhereBase.join(' AND ')} AND (${sqlWhereFiletypes.join(' OR ')}))${(sqlWhereFilter.length > 0) ? ' AND (' + sqlWhereFilter.join(' AND ') + ')' : ''}${(skippedEid.length > 0) ? ' AND (' + skippedEid.map(e => 'eid != ' + e).join(' AND ') + ')' : ''} ORDER BY ${sqlOrderBy} LIMIT ${(analyzerGroup && analyzerGroup.limit) ? analyzerGroup.limit : 100}`
+        const query = `SELECT ${sqlFields.join(', ')} FROM ${sqlTables.join(', ')} WHERE (${sqlWhereBase.join(' AND ')} AND (${sqlWhereFiletypes.join(' OR ')}))${(sqlWhereFilter.length > 0) ? ' AND (' + sqlWhereFilter.join(' AND ') + ')' : ''} ORDER BY ${sqlOrderBy} LIMIT ${(analyzerGroup && analyzerGroup.limit) ? analyzerGroup.limit : 100}`
         console.log(query);
 
         const messages = (await sqlPromiseSafe(query, true)).rows.map(e => {
-            const url = (( e.cache_proxy) ? e.cache_proxy.startsWith('http') ? e.cache_proxy : `https://media.discordapp.net/attachments${e.cache_proxy}` : (e.attachment_hash && e.attachment_name) ? `https://media.discordapp.net/attachments/` + ((e.attachment_hash.includes('/')) ? e.attachment_hash : `${e.channel}/${e.attachment_hash}/${e.attachment_name}`) : undefined) + '';
+            const url = (( e.cache_proxy) ? e.cache_proxy.startsWith('http') ? e.cache_proxy : `https://${(badFiles.has(e.eid) && badFiles.get(e.eid) >= 2) ? 'cdn.discordapp.com' : 'media.discordapp.net'}/attachments${e.cache_proxy}` : (e.attachment_hash && e.attachment_name) ? `https://media.discordapp.net/attachments/` + ((e.attachment_hash.includes('/')) ? e.attachment_hash : `${e.channel}/${e.attachment_hash}/${e.attachment_name}`) : undefined) + '';
             return {
                 url,
                 ...e
@@ -261,6 +256,7 @@
                         }
                         delete downlaods[k];
                     })
+                    badFiles.delete(e.eid);
                 })
                 if (!results) {
                     if (badFiles.has(e.eid)) {
@@ -269,8 +265,7 @@
                             prev++;
                             badFiles.set(e.eid, prev);
                         } else {
-                            skippedEid.push(e.eid);
-                            await sqlPromiseSafe(`UPDATE kanmi_records SET tags = ? WHERE eid = ?`, [ '3/1/cant_tag;', e.eid ])
+                            await sqlPromiseSafe(`UPDATE kanmi_records SET tags = ? WHERE eid = ?`, [ '3/1/cant_tag; ', e.eid ])
                         }
                     } else {
                         badFiles.set(e.eid, 0);
