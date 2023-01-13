@@ -75,27 +75,32 @@
             (fs.readdirSync(config.deepbooru_input_path))
                 .filter(e => fs.existsSync(path.join(config.deepbooru_output_path, `${e.split('.')[0]}.json`)) || (fs.statSync(path.resolve(config.deepbooru_input_path, e))).size <= 16 )
                 .map(e => fs.unlinkSync(path.resolve(config.deepbooru_input_path, e)))
-            let ddOptions = ['evaluate', config.deepbooru_input_path, '--project-path', config.deepbooru_model_path, '--allow-folder', '--save-json', '--save-path', config.deepbooru_output_path, '--no-tag-output']
-            if (config.deepbooru_gpu)
-                ddOptions.push('--allow-gpu')
-            console.log(ddOptions.join(' '))
-            const muginoMeltdown = spawn(((config.deepbooru_exec) ? config.deepbooru_exec : 'deepbooru'), ddOptions, { encoding: 'utf8' })
+            if ((fs.readdirSync(config.deepbooru_input_path)).length > 0) {
+                let ddOptions = ['evaluate', config.deepbooru_input_path, '--project-path', config.deepbooru_model_path, '--allow-folder', '--save-json', '--save-path', config.deepbooru_output_path, '--no-tag-output']
+                if (config.deepbooru_gpu)
+                    ddOptions.push('--allow-gpu')
+                console.log(ddOptions.join(' '))
+                const muginoMeltdown = spawn(((config.deepbooru_exec) ? config.deepbooru_exec : 'deepbooru'), ddOptions, { encoding: 'utf8' })
 
-            if (!config.deepbooru_no_log)
-                muginoMeltdown.stdout.on('data', (data) => console.log(data.toString().trim().split('\n').filter(e => e.trim().length > 1 && !e.trim().includes('===] ')).join('\n')))
-            muginoMeltdown.stderr.on('data', (data) => console.error(data.toString()));
-            muginoMeltdown.on('close', (code, signal) => {
-                (fs.readdirSync(config.deepbooru_input_path))
-                    .filter(e => fs.existsSync(path.join(config.deepbooru_output_path, `${e.split('.')[0]}.json`)))
-                    .map(e => fs.unlinkSync(path.resolve(config.deepbooru_input_path, e)))
-                if (code !== 0) {
-                    console.error(`Mugino Meltdown! MIITS reported a error during tagging operation!`);
-                    resolve(false)
-                } else {
-                    console.log(`Tagging Completed in ${((Date.now() - startTime) / 1000).toFixed(0)} sec!`);
-                    resolve(true)
-                }
-            })
+                if (!config.deepbooru_no_log)
+                    muginoMeltdown.stdout.on('data', (data) => console.log(data.toString().trim().split('\n').filter(e => e.trim().length > 1 && !e.trim().includes('===] ')).join('\n')))
+                muginoMeltdown.stderr.on('data', (data) => console.error(data.toString()));
+                muginoMeltdown.on('close', (code, signal) => {
+                    (fs.readdirSync(config.deepbooru_input_path))
+                        .filter(e => fs.existsSync(path.join(config.deepbooru_output_path, `${e.split('.')[0]}.json`)))
+                        .map(e => fs.unlinkSync(path.resolve(config.deepbooru_input_path, e)))
+                    if (code !== 0) {
+                        console.error(`Mugino Meltdown! MIITS reported a error during tagging operation!`);
+                        resolve(false)
+                    } else {
+                        console.log(`Tagging Completed in ${((Date.now() - startTime) / 1000).toFixed(0)} sec!`);
+                        resolve(true)
+                    }
+                })
+            } else {
+                console.info(`There are no file that need to be tagged!`);
+                resolve(true)
+            }
         })
     }
     async function queryForTags(analyzerGroup) {
