@@ -51,7 +51,6 @@
             console.log(err);
         }
     }
-    //await clearFolder(config.deepbooru_input_path);
     // On-The-Fly Tagging System (aka no wasted table space)
     async function addTagForEid(eid, name, rating = 0) {
         let tagId = 0;
@@ -70,7 +69,7 @@
         ])
     }
     async function queryImageTags() {
-        console.log('Processing images for tags...')
+        console.log('Processing image tags via MIITS Client...')
         return new Promise(async (resolve) => {
             const startTime = Date.now();
             (fs.readdirSync(config.deepbooru_input_path))
@@ -90,7 +89,7 @@
                     .filter(e => fs.existsSync(path.join(config.deepbooru_output_path, `${e.split('.')[0]}.json`)))
                     .map(e => fs.unlinkSync(path.resolve(config.deepbooru_input_path, e)))
                 if (code !== 0) {
-                    console.error(`Mugino Meltdown! MIITS reported a error!`);
+                    console.error(`Mugino Meltdown! MIITS reported a error during tagging operation!`);
                     resolve(false)
                 } else {
                     console.log(`Tagging Completed in ${((Date.now() - startTime) / 1000).toFixed(0)} sec!`);
@@ -127,6 +126,7 @@
             "kanmi_records.attachment_name LIKE '%.gif'",
         ]
         let sqlWhereFilter = [];
+
         if (analyzerGroup && analyzerGroup.query) {
             sqlWhereFilter.push(analyzerGroup.query)
         } else {
@@ -150,18 +150,30 @@
                 sqlWhereFilter.push('(' + analyzerGroup.vcid.map(h => `kanmi_channels.virtual_cid = '${h}'`).join(' OR ') + ')');
             }
         }
+
         const sqlOrderBy = (analyzerGroup && analyzerGroup.order) ? analyzerGroup.order :'eid DESC'
         const query = `SELECT ${sqlFields.join(', ')} FROM ${sqlTables.join(', ')} WHERE (${sqlWhereBase.join(' AND ')} AND (${sqlWhereFiletypes.join(' OR ')}))${(sqlWhereFilter.length > 0) ? ' AND (' + sqlWhereFilter.join(' AND ') + ')' : ''} ORDER BY ${sqlOrderBy} LIMIT ${(analyzerGroup && analyzerGroup.limit) ? analyzerGroup.limit : 100}`
-        console.log(query);
+        console.log(`Selecting data for analyzer group...`, analyzerGroup);
 
         const messages = (await sqlPromiseSafe(query, true)).rows.map(e => {
-            const url = (( e.cache_proxy) ? e.cache_proxy.startsWith('http') ? e.cache_proxy : `https://${(badFiles.has(e.eid) && badFiles.get(e.eid) >= 2) ? 'cdn.discordapp.com' : 'media.discordapp.net'}/attachments${e.cache_proxy}` : (e.attachment_hash && e.attachment_name) ? `https://media.discordapp.net/attachments/` + ((e.attachment_hash.includes('/')) ? e.attachment_hash : `${e.channel}/${e.attachment_hash}/${e.attachment_name}`) : undefined) + '';
-            return {
-                url,
-                ...e
+            function getimageSizeParam() {
+            if (e.sizeH && e.sizeW && Discord_CDN_Accepted_Files.indexOf(e.attachment_name.split('.').pop().toLowerCase()) !== -1 && (e.sizeH > 512 || e.sizeW > 512)) {
+                let ih = 512;
+                let iw = 512;
+                if (e.sizeW >= e.sizeH) {
+                    iw = (e.sizeW * (512 / e.sizeH)).toFixed(0)
+                } else {
+                    ih = (e.sizeH * (512 / e.sizeW)).toFixed(0)
+                }
+                return `?width=${iw}&height=${ih}`
+            } else {
+                return ''
             }
+        }
+            const url = (( e.cache_proxy) ? e.cache_proxy.startsWith('http') ? e.cache_proxy : `https://${(config.no_media_cdn || (badFiles.has(e.eid) && badFiles.get(e.eid) >= 2)) ? 'cdn.discordapp.com' : 'media.discordapp.net'}/attachments${e.cache_proxy}` : (e.attachment_hash && e.attachment_name) ? `https://media.discordapp.net/attachments/` + ((e.attachment_hash.includes('/')) ? e.attachment_hash : `${e.channel}/${e.attachment_hash}/${e.attachment_name}${(config.no_media_cdn || (badFiles.has(e.eid) && badFiles.get(e.eid) >= 2)) ? '' : getimageSizeParam()}`) : undefined) + '';
+            return { url, ...e };
         })
-        console.log(messages.length + ' attachments to tag!')
+        console.log(messages.length + ' items need to be tagged!')
         let downlaods = {}
         const existingFiles = [
             ...new Set([
@@ -169,9 +181,7 @@
                 ...fs.readdirSync(config.deepbooru_output_path).map(e => e.split('.')[0])
             ])
         ]
-        messages.filter(e => existingFiles.indexOf(e.eid.toString()) === -1).map((e,i) => {
-            downlaods[i] = e
-        })
+        messages.filter(e => existingFiles.indexOf(e.eid.toString()) === -1).map((e,i) => { downlaods[i] = e });
         if (messages.length === 0)
             return true;
         while (Object.keys(downlaods).length !== 0) {
@@ -180,22 +190,10 @@
             await Promise.all(downloadKeys.map(async k => {
                 const e = downlaods[k];
                 const results = await new Promise(ok => {
-                    function getimageSizeParam() {
-                        if (e.sizeH && e.sizeW && Discord_CDN_Accepted_Files.indexOf(e.attachment_name.split('.').pop().toLowerCase()) !== -1 && (e.sizeH > 512 || e.sizeW > 512)) {
-                            let ih = 512;
-                            let iw = 512;
-                            if (e.sizeW >= e.sizeH) {
-                                iw = (e.sizeW * (512 / e.sizeH)).toFixed(0)
-                            } else {
-                                ih = (e.sizeH * (512 / e.sizeW)).toFixed(0)
-                            }
-                            return `?width=${iw}&height=${ih}`
-                        } else {
-                            return ''
-                        }
-                    }
+
+                    const url = e.url;
                     request.get({
-                        url: e.url + getimageSizeParam(),
+                        url,
                         headers: {
                             'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
                             'accept-language': 'en-US,en;q=0.9',
@@ -218,7 +216,7 @@
                                     const mime = await new Promise(ext => {
                                         fileType.fromBuffer(body,function(err, result) {
                                             if (err) {
-                                                console.log(err);
+                                                console.error(`Failed to get MIME type for ${e.eid}`, err);
                                                 ext(null);
                                             } else {
                                                 ext(result);
@@ -227,17 +225,16 @@
                                     })
                                     if (mime.ext && ['png', 'jpg'].indexOf(mime.ext) !== -1) {
                                         fs.writeFileSync(path.join(config.deepbooru_input_path, `${e.eid}.${mime.ext}`), body);
-                                        console.log(`Downloaded ${e.url}`)
                                         ok(true);
                                     } else if (mime.ext && ['gif', 'tiff', 'webp'].indexOf(mime.ext) !== -1) {
                                         await sharp(body)
                                             .toFormat('png')
                                             .toFile(path.join(config.deepbooru_input_path, `${e.eid}.png`), (err, info) => {
                                                 if (err) {
-                                                    console.error(err);
+                                                    console.error(`Failed to convert ${e.eid} to PNG file`, err);
                                                     ok(false);
                                                 } else {
-                                                    console.log(`Downloaded as PNG ${e.url}`)
+                                                    //console.log(`Downloaded as PNG ${e.url}`)
                                                     ok(true);
                                                 }
                                             })
@@ -246,11 +243,12 @@
                                         ok(false);
                                     }
                                 } else {
-                                    console.error(`Download failed, File size to small: ${e.url}`);
+                                    console.error(`Download failed, File size to small: ${url}`);
                                     ok(false);
                                 }
                             } catch (err) {
-                                console.error(err);
+                                console.error(`Unexpected Error processing ${e.eid}!`, err);
+                                console.error(e)
                                 ok(false);
                             }
                         }
@@ -265,7 +263,8 @@
                             prev++;
                             badFiles.set(e.eid, prev);
                         } else {
-                            await sqlPromiseSafe(`UPDATE kanmi_records SET tags = ? WHERE eid = ?`, [ '3/1/cant_tag; ', e.eid ])
+                            await sqlPromiseSafe(`UPDATE kanmi_records SET tags = ? WHERE eid = ?`, [ '3/1/cant_tag; ', e.eid ]);
+                            console.error(`Failed to get data for ${e.eid} multiple times, it will be permanently skipped!`)
                         }
                     } else {
                         badFiles.set(e.eid, 0);
