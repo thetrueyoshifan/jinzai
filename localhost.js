@@ -37,7 +37,7 @@
         })
     })
     console.log(`Loaded ${modelTags.size} tags from model`);
-    const badFiles = new Map();
+    const activeFiles = new Map();
 
 
     async function clearFolder(folderPath) {
@@ -175,7 +175,7 @@
                 return ''
             }
         }
-            const url = (( e.cache_proxy) ? e.cache_proxy.startsWith('http') ? e.cache_proxy : `https://${(config.no_media_cdn || (badFiles.has(e.eid) && (badFiles.get(e.eid)) >= 2)) ? 'cdn.discordapp.com' : 'media.discordapp.net'}/attachments${e.cache_proxy}` : (e.attachment_hash && e.attachment_name) ? `https://media.discordapp.net/attachments/` + ((e.attachment_hash.includes('/')) ? e.attachment_hash : `${e.channel}/${e.attachment_hash}/${e.attachment_name}${(config.no_media_cdn || (badFiles.has(e.eid) && (badFiles.get(e.eid)) >= 2)) ? '' : getimageSizeParam()}`) : undefined) + '';
+            const url = (( e.cache_proxy) ? e.cache_proxy.startsWith('http') ? e.cache_proxy : `https://${(config.no_media_cdn || (activeFiles.has(e.eid) && (activeFiles.get(e.eid)) >= 2)) ? 'cdn.discordapp.com' : 'media.discordapp.net'}/attachments${e.cache_proxy}${(config.no_media_cdn || (activeFiles.has(e.eid) && (activeFiles.get(e.eid)) >= 2)) ? '' : getimageSizeParam()}` : (e.attachment_hash && e.attachment_name) ? `https://${(config.no_media_cdn || (activeFiles.has(e.eid) && (activeFiles.get(e.eid)) >= 2)) ? 'cdn.discordapp.com' : 'media.discordapp.net'}/attachments/` + ((e.attachment_hash.includes('/')) ? e.attachment_hash : `${e.channel}/${e.attachment_hash}/${e.attachment_name}${(config.no_media_cdn || (activeFiles.has(e.eid) && (activeFiles.get(e.eid)) >= 2)) ? '' : getimageSizeParam()}`) : undefined) + '';
             return { url, ...e };
         })
         console.log(messages.length + ' items need to be tagged!')
@@ -232,7 +232,6 @@
                                     if (config.allow_direct_write && mime.ext && ['png', 'jpg'].indexOf(mime.ext) !== -1) {
                                         fs.writeFileSync(path.join(config.deepbooru_input_path, `${e.eid}.${mime.ext}`), body);
                                         ok(true);
-                                        badFiles.delete(e.eid);
                                     } else if ((!config.allow_direct_write && mime.ext && ['png', 'jpg', 'gif', 'tiff', 'webp'].indexOf(mime.ext) !== -1) || (mime.ext && ['gif', 'tiff', 'webp'].indexOf(mime.ext) !== -1)) {
                                         await sharp(body)
                                             .toFormat('png')
@@ -243,7 +242,6 @@
                                                 } else {
                                                     //console.log(`Downloaded as PNG ${e.url}`)
                                                     ok(true);
-                                                    badFiles.delete(e.eid);
                                                 }
                                             })
                                     } else {
@@ -264,17 +262,17 @@
                     })
                 })
                 if (!results) {
-                    if (badFiles.has(e.eid)) {
-                        let prev = badFiles.get(e.eid)
+                    if (activeFiles.has(e.eid)) {
+                        let prev = activeFiles.get(e.eid)
                         if (prev <= 5) {
                             prev++;
-                            badFiles.set(e.eid, prev);
+                            activeFiles.set(e.eid, prev);
                         } else {
                             await sqlPromiseSafe(`UPDATE kanmi_records SET tags = ? WHERE eid = ?`, [ '3/1/cant_tag; ', e.eid ]);
                             console.error(`Failed to get data for ${e.eid} multiple times, it will be permanently skipped!`)
                         }
                     } else {
-                        badFiles.set(e.eid, 0);
+                        activeFiles.set(e.eid, 0);
                     }
                 }
                 return results;
@@ -308,6 +306,7 @@
             const imageFile = fs.readdirSync(config.deepbooru_input_path).filter(k => k.split('.')[0] === eid).pop();
             if (imageFile)
                 fs.unlinkSync(path.join(config.deepbooru_input_path, (imageFile)));
+            activeFiles.delete(eid);
         })
         .on('error', function (error) {
             console.error(error);
