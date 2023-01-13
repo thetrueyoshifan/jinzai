@@ -74,7 +74,7 @@
         return new Promise(async (resolve) => {
             const startTime = Date.now();
             (fs.readdirSync(config.deepbooru_input_path))
-                .filter(e => fs.existsSync(path.join(config.deepbooru_output_path, `${e.split('.')[0]}.json`)))
+                .filter(e => fs.existsSync(path.join(config.deepbooru_output_path, `${e.split('.')[0]}.json`)) || (fs.statSync(path.resolve(config.deepbooru_input_path, e))).size <= 16 )
                 .map(e => fs.unlinkSync(path.resolve(config.deepbooru_input_path, e)))
             let ddOptions = ['evaluate', config.deepbooru_input_path, '--project-path', config.deepbooru_model_path, '--allow-folder', '--save-json', '--save-path', config.deepbooru_output_path, '--no-tag-output']
             if (config.deepbooru_gpu)
