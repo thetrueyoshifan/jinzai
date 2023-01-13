@@ -175,7 +175,7 @@
                 return ''
             }
         }
-            const url = (( e.cache_proxy) ? e.cache_proxy.startsWith('http') ? e.cache_proxy : `https://${(config.no_media_cdn || (badFiles.has(e.eid) && badFiles.get(e.eid) >= 2)) ? 'cdn.discordapp.com' : 'media.discordapp.net'}/attachments${e.cache_proxy}` : (e.attachment_hash && e.attachment_name) ? `https://media.discordapp.net/attachments/` + ((e.attachment_hash.includes('/')) ? e.attachment_hash : `${e.channel}/${e.attachment_hash}/${e.attachment_name}${(config.no_media_cdn || (badFiles.has(e.eid) && badFiles.get(e.eid) >= 2)) ? '' : getimageSizeParam()}`) : undefined) + '';
+            const url = (( e.cache_proxy) ? e.cache_proxy.startsWith('http') ? e.cache_proxy : `https://${(config.no_media_cdn || (badFiles.has(e.eid) && (badFiles.get(e.eid)) >= 2)) ? 'cdn.discordapp.com' : 'media.discordapp.net'}/attachments${e.cache_proxy}` : (e.attachment_hash && e.attachment_name) ? `https://media.discordapp.net/attachments/` + ((e.attachment_hash.includes('/')) ? e.attachment_hash : `${e.channel}/${e.attachment_hash}/${e.attachment_name}${(config.no_media_cdn || (badFiles.has(e.eid) && badFiles.get(e.eid) >= 2)) ? '' : getimageSizeParam()}`) : undefined) + '';
             return { url, ...e };
         })
         console.log(messages.length + ' items need to be tagged!')
@@ -214,7 +214,8 @@
                         },
                     }, async function (err, res, body) {
                         if (err) {
-                            ok(null)
+                            console.error(`Download failed: ${url}`, err);
+                            ok(false)
                         } else {
                             try {
                                 if (body && body.length > 100) {
