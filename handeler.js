@@ -1,7 +1,7 @@
 (async () => {
     let systemglobal = require('./config.json');
     if (process.env.SYSTEM_NAME && process.env.SYSTEM_NAME.trim().length > 0)
-        systemglobal.SystemName = process.env.SYSTEM_NAME.trim()
+        systemglobal.system_name = process.env.SYSTEM_NAME.trim()
     const facilityName = 'Mugino-Ctrl';
 
     const chokidar = require('chokidar');
@@ -27,17 +27,17 @@
     Logger.printLine("Init", "Mugino Orchestrator Server", "debug")
 
     if (process.env.MQ_HOST && process.env.MQ_HOST.trim().length > 0)
-        systemglobal.MQServer = process.env.MQ_HOST.trim()
+        systemglobal.mq_host = process.env.MQ_HOST.trim()
     if (process.env.RABBITMQ_DEFAULT_USER && process.env.RABBITMQ_DEFAULT_USER.trim().length > 0)
-        systemglobal.MQUsername = process.env.RABBITMQ_DEFAULT_USER.trim()
+        systemglobal.mq_user = process.env.RABBITMQ_DEFAULT_USER.trim()
     if (process.env.RABBITMQ_DEFAULT_PASS && process.env.RABBITMQ_DEFAULT_PASS.trim().length > 0)
-        systemglobal.MQPassword = process.env.RABBITMQ_DEFAULT_PASS.trim()
+        systemglobal.mq_pass = process.env.RABBITMQ_DEFAULT_PASS.trim()
 
-    const MQServer = `amqp://${systemglobal.MQUsername}:${systemglobal.MQPassword}@${systemglobal.MQServer}/?heartbeat=60`
-    const MQWorker1 = `${systemglobal.Mugino_In}`
+    const mq_host = `amqp://${systemglobal.mq_user}:${systemglobal.mq_pass}@${systemglobal.mq_host}/?heartbeat=60`
+    const MQWorker1 = `${systemglobal.mq_mugino_in}`
     const MQWorker2 = `${MQWorker1}.priority`
     const MQWorker3 = `${MQWorker1}.backlog`
-    const baseKeyName = `mugino.${systemglobal.SystemName}.`
+    const baseKeyName = `mugino.${systemglobal.system_name}.`
 
     const requestQueue     = new Map();
     const requestQueueMeta = new Map();
@@ -199,7 +199,7 @@
         }
     }
     function start() {
-        amqp.connect(MQServer, function(err, conn) {
+        amqp.connect(mq_host, function(err, conn) {
             if (err) {
                 Logger.printLine("KanmiMQ", "Initialization Error", "critical", err)
                 return setTimeout(start, 1000);
@@ -213,7 +213,7 @@
                 Logger.printLine("KanmiMQ", "Attempting to Reconnect...", "debug")
                 return setTimeout(start, 1000);
             });
-            Logger.printLine("KanmiMQ", `Connected to Kanmi Exchange as ${systemglobal.SystemName}!`, "info")
+            Logger.printLine("KanmiMQ", `Connected to Kanmi Exchange as ${systemglobal.system_name}!`, "info")
             amqpConn = conn;
             whenConnected();
         });
@@ -227,7 +227,7 @@
     }
     async function whenConnected() {
         if (systemglobal.Watchdog_Host && systemglobal.Watchdog_ID) {
-            request.get(`http://${systemglobal.Watchdog_Host}/watchdog/init?id=${systemglobal.Watchdog_ID}&entity=${facilityName}-${systemglobal.SystemName}`, async (err, res) => {
+            request.get(`http://${systemglobal.Watchdog_Host}/watchdog/init?id=${systemglobal.Watchdog_ID}&entity=${facilityName}-${systemglobal.system_name}`, async (err, res) => {
                 if (err || res && res.statusCode !== undefined && res.statusCode !== 200) {
                     console.error(`Failed to init watchdog server ${systemglobal.Watchdog_Host} as ${facilityName}:${systemglobal.Watchdog_ID}`);
                 }

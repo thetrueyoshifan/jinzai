@@ -2,6 +2,7 @@
   "name": "mugino-intellidex",
   "version": "1.0.0",
   "dependencies": {
+    "@sapphire/snowflake": "^3.4.0",
     "amqplib": "^0.10.3",
     "chalk": "^5.2.0",
     "cheerio": "^1.0.0-rc.12",
@@ -16,6 +17,7 @@
     "md5": "^2.3.0",
     "mysql2": "^2.3.3",
     "node-cron": "^3.0.2",
+    "node-persist": "^3.1.0",
     "request": "^2.88.2",
     "scramjet": "^4.36.9",
     "sharp": "^0.31.3",

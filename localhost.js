@@ -1,5 +1,9 @@
 (async () => {
-    const config = require('./config.json');
+    const systemglobal = require('./config.json');
+    if (process.env.SYSTEM_NAME && process.env.SYSTEM_NAME.trim().length > 0)
+        systemglobal.system_name = process.env.SYSTEM_NAME.trim()
+    const facilityName = 'Mugino-Ctrl';
+
     const md5 = require('md5');
     const cron = require('node-cron');
     const { spawn, exec } = require("child_process");
@@ -8,8 +12,13 @@
     const chokidar = require('chokidar');
     const fileType = require('detect-file-type');
     const sharp = require('sharp');
+    const storageHandler = require('node-persist');
     const request = require('request').defaults({ encoding: null, jar: true });
     const {sqlPromiseSafe, sqlPromiseSimple} = require("./utils/sqlClient");
+    const Logger = require('./utils/logSystem');
+    const mqClient = require('./utils/mqAccess');
+    const { DiscordSnowflake } = require('@sapphire/snowflake');
+    const globalRunKey = crypto.randomBytes(5).toString("hex");
     const Discord_CDN_Accepted_Files = ['jpg','jpeg','jfif','png','webp','gif'];
 
     console.log("Reading tags from database...");
@@ -17,8 +26,8 @@
     (await sqlPromiseSafe(`SELECT id, name FROM sequenzia_index_tags`)).rows.map(e => exsitingTags.set(e.name, e.id));
     console.log("Reading tags from model...");
     let modelTags = new Map();
-    const _modelTags = (fs.readFileSync(path.join(config.deepbooru_model_path, './tags.txt'))).toString().trim().split('\n').map(line => line.trim());
-    const _modelCategories = JSON.parse(fs.readFileSync(path.join(config.deepbooru_model_path, './categories.json')).toString());
+    const _modelTags = (fs.readFileSync(path.join(systemglobal.deepbooru_model_path, './tags.txt'))).toString().trim().split('\n').map(line => line.trim());
+    const _modelCategories = JSON.parse(fs.readFileSync(path.join(systemglobal.deepbooru_model_path, './categories.json')).toString());
     Object.values(_modelCategories).map((e,i,a) => {
         const c = ((n) => {
             switch (n) {
@@ -38,7 +47,247 @@
     })
     console.log(`Loaded ${modelTags.size} tags from model`);
     const activeFiles = new Map();
+    let init = false;
 
+    Logger.printLine("Init", "Mugino Orchestrator Server", "debug");
+    const baseKeyName = `mugino.${systemglobal.system_name}.`
+
+    const LocalQueue = storageHandler.create({
+        dir: 'data/LocalQueue',
+        stringify: JSON.stringify,
+        parse: JSON.parse,
+        encoding: 'utf8',
+        logging: false,
+        ttl: false,
+        expiredInterval: 2 * 60 * 1000, // every 2 minutes the process will clean-up the expired cache
+        forgiveParseErrors: false
+    });
+    LocalQueue.init((err) => {
+        if (err) {
+            Logger.printLine("LocalQueue", "Failed to initialize the local request storage", "error", err)
+        } else {
+            Logger.printLine("LocalQueue", "Initialized successfully the local request storage", "debug", err)
+        }
+    });
+
+    const ruleSets = new Map();
+
+    if (systemglobal.mq_host) {
+        //const RateLimiter = require('limiter').RateLimiter;
+        //const limiter = new RateLimiter(5, 5000);
+        //const limiterlocal = new RateLimiter(1, 1000);
+        //const limiterbacklog = new RateLimiter(5, 5000);
+        const amqp = require('amqplib/callback_api');
+        let amqpConn = null;
+
+        if (process.env.MQ_HOST && process.env.MQ_HOST.trim().length > 0)
+            systemglobal.mq_host = process.env.MQ_HOST.trim()
+        if (process.env.RABBITMQ_DEFAULT_USER && process.env.RABBITMQ_DEFAULT_USER.trim().length > 0)
+            systemglobal.mq_user = process.env.RABBITMQ_DEFAULT_USER.trim()
+        if (process.env.RABBITMQ_DEFAULT_PASS && process.env.RABBITMQ_DEFAULT_PASS.trim().length > 0)
+            systemglobal.mq_pass = process.env.RABBITMQ_DEFAULT_PASS.trim()
+
+        const mq_host = `amqp://${systemglobal.mq_user}:${systemglobal.mq_pass}@${systemglobal.mq_host}/?heartbeat=60`
+        const MQWorker1 = `${systemglobal.mq_mugino_in}`
+        const MQWorker2 = `${MQWorker1}.priority`
+        const MQWorker3 = `${MQWorker1}.backlog`
+
+        systemglobal.mq_rules.map(async rule => {
+            rule.channels.map(ch => { ruleSets.set(ch, rule) })
+        })
+
+        function startWorker() {
+            amqpConn.createChannel(function(err, ch) {
+                if (closeOnErr(err)) return;
+                ch.on("error", function(err) {
+                    Logger.printLine("KanmiMQ", "Channel 1 Error (Remote)", "error", err)
+                });
+                ch.on("close", function() {
+                    Logger.printLine("KanmiMQ", "Channel 1 Closed (Remote)", "critical")
+                    start();
+                });
+                ch.prefetch(10);
+                ch.assertQueue(MQWorker1, { durable: true }, function(err, _ok) {
+                    if (closeOnErr(err)) return;
+                    ch.consume(MQWorker1, processMsg, { noAck: false });
+                    Logger.printLine("KanmiMQ", "Channel 1 Worker Ready (Remote)", "debug")
+                });
+                ch.assertExchange("kanmi.exchange", "direct", {}, function(err, _ok) {
+                    if (closeOnErr(err)) return;
+                    ch.bindQueue(MQWorker1, "kanmi.exchange", MQWorker1, [], function(err, _ok) {
+                        if (closeOnErr(err)) return;
+                        Logger.printLine("KanmiMQ", "Channel 1 Worker Bound to Exchange (Remote)", "debug")
+                    })
+                })
+                function processMsg(msg) {
+                    work(msg, 'normal', function(ok) {
+                        try {
+                            if (ok)
+                                ch.ack(msg);
+                            else
+                                ch.reject(msg, true);
+                        } catch (e) {
+                            closeOnErr(e);
+                        }
+                    });
+                }
+            });
+        }
+        // Priority Requests
+        function startWorker2() {
+            amqpConn.createChannel(function(err, ch) {
+                if (closeOnErr(err)) return;
+                ch.on("error", function(err) {
+                    Logger.printLine("KanmiMQ", "Channel 2 Error (Local)", "error", err)
+                });
+                ch.on("close", function() {
+                    Logger.printLine("KanmiMQ", "Channel 2 Closed (Local)", "critical")
+                    start();
+                });
+                ch.prefetch(1);
+                ch.assertQueue(MQWorker2, { durable: true }, function(err, _ok) {
+                    if (closeOnErr(err)) return;
+                    ch.consume(MQWorker2, processMsg, { noAck: false });
+                    Logger.printLine("KanmiMQ", "Channel 2 Worker Ready (Local)", "debug")
+                });
+                ch.assertExchange("kanmi.exchange", "direct", {}, function(err, _ok) {
+                    if (closeOnErr(err)) return;
+                    ch.bindQueue(MQWorker2, "kanmi.exchange", MQWorker2, [], function(err, _ok) {
+                        if (closeOnErr(err)) return;
+                        Logger.printLine("KanmiMQ", "Channel 2 Worker Bound to Exchange (Local)", "debug")
+                    })
+                })
+
+                function processMsg(msg) {
+                    work(msg, 'priority', function(ok) {
+                        try {
+                            if (ok)
+                                ch.ack(msg);
+                            else
+                                ch.reject(msg, true);
+                        } catch (e) {
+                            closeOnErr(e);
+                        }
+                    });
+                }
+            });
+        }
+        // Backlog Requests
+        function startWorker3() {
+            amqpConn.createChannel(function(err, ch) {
+                if (closeOnErr(err)) return;
+                ch.on("error", function(err) {
+                    Logger.printLine("KanmiMQ", "Channel 3 Error (Backlog)", "error", err)
+                });
+                ch.on("close", function() {
+                    Logger.printLine("KanmiMQ", "Channel 3 Closed (Backlog)", "critical")
+                    start();
+                });
+                ch.prefetch(5);
+                ch.assertQueue(MQWorker3, { durable: true, queueMode: 'lazy'  }, function(err, _ok) {
+                    if (closeOnErr(err)) return;
+                    ch.consume(MQWorker3, processMsg, { noAck: false });
+                    Logger.printLine("KanmiMQ", "Channel 3 Worker Ready (Backlog)", "debug")
+                });
+                ch.assertExchange("kanmi.exchange", "direct", {}, function(err, _ok) {
+                    if (closeOnErr(err)) return;
+                    ch.bindQueue(MQWorker3, "kanmi.exchange", MQWorker3, [], function(err, _ok) {
+                        if (closeOnErr(err)) return;
+                        Logger.printLine("KanmiMQ", "Channel 3 Worker Bound to Exchange (Backlog)", "debug")
+                    })
+                })
+                function processMsg(msg) {
+                    work(msg, 'backlog', function(ok) {
+                        try {
+                            if (ok)
+                                ch.ack(msg);
+                            else
+                                ch.reject(msg, true);
+                        } catch (e) {
+                            closeOnErr(e);
+                        }
+                    });
+                }
+            });
+        }
+        async function work(msg, queue, cb) {
+            try {
+                const fileId = 'message-' + globalRunKey + '-' + DiscordSnowflake.generate();
+                if (ruleSets.has(msg.messageChannelID) && msg.messageType === 'sfile' && msg.itemFileData && msg.itemFileName && ['jpg', 'jpeg', 'jfif', 'png'].indexOf(msg.itemFileName.split('.').pop().toLowerCase()) !== -1) {
+                    Logger.printLine(`MessageProcessor`, `Process Message: (${queue}) From: ${msg.fromClient}, To Channel: ${msg.messageChannelID}`, "info");
+                    LocalQueue.setItem(fileId, { id: fileId, queue, message: msg })
+                        .then(async function () {
+                            await sharp(new Buffer.from(msg.itemFileData))
+                                .toFormat('png')
+                                .toFile(path.join(systemglobal.deepbooru_input_path, `${fileId}.png`), (err, info) => {
+                                    if (err) {
+                                        Logger.printLine("SaveFile", `Error when saving the file ${fileId}`, "error", err)
+                                        mqClient.sendData( `${systemglobal.mq_discord_out}${(queue !== 'normal') ? '.' + queue : ''}`, msg, function (ok) {
+                                            cb(ok);
+                                        });
+                                    } else {
+                                        cb(true);
+                                    }
+                                })
+                        })
+                        .catch(function (err) {
+                            Logger.printLine(`MessageProcessor`, `Failed to set save message`, `error`, err)
+                            cb(false);
+                        })
+                } else {
+                    Logger.printLine(`MessageProcessor`, `Bypass Message: (${queue}) From: ${msg.fromClient}, To Channel: ${msg.messageChannelID}`, "debug");
+                    mqClient.sendData( `${systemglobal.mq_discord_out}${(queue !== 'normal') ? '.' + queue : ''}`, msg, function (ok) {
+                        cb(ok);
+                    });
+                }
+            } catch (err) {
+                Logger.printLine("JobParser", "Error Parsing Job - " + err.message, "critical")
+                cb(false);
+            }
+        }
+        function start() {
+            amqp.connect(mq_host, function(err, conn) {
+                if (err) {
+                    Logger.printLine("KanmiMQ", "Initialization Error", "critical", err)
+                    return setTimeout(start, 1000);
+                }
+                conn.on("error", function(err) {
+                    if (err.message !== "Connection closing") {
+                        Logger.printLine("KanmiMQ", "Initialization Connection Error", "emergency", err)
+                    }
+                });
+                conn.on("close", function() {
+                    Logger.printLine("KanmiMQ", "Attempting to Reconnect...", "debug")
+                    return setTimeout(start, 1000);
+                });
+                Logger.printLine("KanmiMQ", `Connected to Kanmi Exchange as ${systemglobal.system_name}!`, "info")
+                amqpConn = conn;
+                whenConnected();
+            });
+        }
+        function closeOnErr(err) {
+            if (!err) return false;
+            console.error(err)
+            Logger.printLine("KanmiMQ", "Connection Closed due to error", "error", err)
+            amqpConn.close();
+            return true;
+        }
+        async function whenConnected() {
+            if (systemglobal.Watchdog_Host && systemglobal.Watchdog_ID) {
+                request.get(`http://${systemglobal.Watchdog_Host}/watchdog/init?id=${systemglobal.Watchdog_ID}&entity=${facilityName}-${systemglobal.system_name}`, async (err, res) => {
+                    if (err || res && res.statusCode !== undefined && res.statusCode !== 200) {
+                        console.error(`Failed to init watchdog server ${systemglobal.Watchdog_Host} as ${facilityName}:${systemglobal.Watchdog_ID}`);
+                    }
+                })
+            }
+            startWorker();
+            startWorker2();
+            startWorker3();
+            if (process.send && typeof process.send === 'function')
+                process.send('ready');
+            init = true
+        }
+    }
 
     async function clearFolder(folderPath) {
         try {
@@ -72,23 +321,23 @@
         console.log('Processing image tags via MIITS Client...')
         return new Promise(async (resolve) => {
             const startTime = Date.now();
-            (fs.readdirSync(config.deepbooru_input_path))
-                .filter(e => fs.existsSync(path.join(config.deepbooru_output_path, `${e.split('.')[0]}.json`)) || (fs.statSync(path.resolve(config.deepbooru_input_path, e))).size <= 16 )
-                .map(e => fs.unlinkSync(path.resolve(config.deepbooru_input_path, e)))
-            if ((fs.readdirSync(config.deepbooru_input_path)).length > 0) {
-                let ddOptions = ['evaluate', config.deepbooru_input_path, '--project-path', config.deepbooru_model_path, '--allow-folder', '--save-json', '--save-path', config.deepbooru_output_path, '--no-tag-output']
-                if (config.deepbooru_gpu)
+            (fs.readdirSync(systemglobal.deepbooru_input_path))
+                .filter(e => fs.existsSync(path.join(systemglobal.deepbooru_output_path, `${e.split('.')[0]}.json`)) || (fs.statSync(path.resolve(systemglobal.deepbooru_input_path, e))).size <= 16 )
+                .map(e => fs.unlinkSync(path.resolve(systemglobal.deepbooru_input_path, e)))
+            if ((fs.readdirSync(systemglobal.deepbooru_input_path)).length > 0) {
+                let ddOptions = ['evaluate', systemglobal.deepbooru_input_path, '--project-path', systemglobal.deepbooru_model_path, '--allow-folder', '--save-json', '--save-path', systemglobal.deepbooru_output_path, '--no-tag-output']
+                if (systemglobal.deepbooru_gpu)
                     ddOptions.push('--allow-gpu')
                 console.log(ddOptions.join(' '))
-                const muginoMeltdown = spawn(((config.deepbooru_exec) ? config.deepbooru_exec : 'deepbooru'), ddOptions, { encoding: 'utf8' })
+                const muginoMeltdown = spawn(((systemglobal.deepbooru_exec) ? systemglobal.deepbooru_exec : 'deepbooru'), ddOptions, { encoding: 'utf8' })
 
-                if (!config.deepbooru_no_log)
+                if (!systemglobal.deepbooru_no_log)
                     muginoMeltdown.stdout.on('data', (data) => console.log(data.toString().trim().split('\n').filter(e => e.trim().length > 1 && !e.trim().includes('===] ')).join('\n')))
                 muginoMeltdown.stderr.on('data', (data) => console.error(data.toString()));
                 muginoMeltdown.on('close', (code, signal) => {
-                    (fs.readdirSync(config.deepbooru_input_path))
-                        .filter(e => fs.existsSync(path.join(config.deepbooru_output_path, `${e.split('.')[0]}.json`)))
-                        .map(e => fs.unlinkSync(path.resolve(config.deepbooru_input_path, e)))
+                    (fs.readdirSync(systemglobal.deepbooru_input_path))
+                        .filter(e => fs.existsSync(path.join(systemglobal.deepbooru_output_path, `${e.split('.')[0]}.json`)))
+                        .map(e => fs.unlinkSync(path.resolve(systemglobal.deepbooru_input_path, e)))
                     if (code !== 0) {
                         console.error(`Mugino Meltdown! MIITS reported a error during tagging operation!`);
                         resolve(false)
@@ -175,22 +424,22 @@
                 return ''
             }
         }
-            const url = (( e.cache_proxy) ? e.cache_proxy.startsWith('http') ? e.cache_proxy : `https://${(config.no_media_cdn || (activeFiles.has(e.eid) && (activeFiles.get(e.eid)) >= 2)) ? 'cdn.discordapp.com' : 'media.discordapp.net'}/attachments${e.cache_proxy}${(config.no_media_cdn || (activeFiles.has(e.eid) && (activeFiles.get(e.eid)) >= 2)) ? '' : getimageSizeParam()}` : (e.attachment_hash && e.attachment_name) ? `https://${(config.no_media_cdn || (activeFiles.has(e.eid) && (activeFiles.get(e.eid)) >= 2)) ? 'cdn.discordapp.com' : 'media.discordapp.net'}/attachments/` + ((e.attachment_hash.includes('/')) ? e.attachment_hash : `${e.channel}/${e.attachment_hash}/${e.attachment_name}${(config.no_media_cdn || (activeFiles.has(e.eid) && (activeFiles.get(e.eid)) >= 2)) ? '' : getimageSizeParam()}`) : undefined) + '';
+            const url = (( e.cache_proxy) ? e.cache_proxy.startsWith('http') ? e.cache_proxy : `https://${(systemglobal.no_media_cdn || (activeFiles.has(e.eid) && (activeFiles.get(e.eid)) >= 2)) ? 'cdn.discordapp.com' : 'media.discordapp.net'}/attachments${e.cache_proxy}${(systemglobal.no_media_cdn || (activeFiles.has(e.eid) && (activeFiles.get(e.eid)) >= 2)) ? '' : getimageSizeParam()}` : (e.attachment_hash && e.attachment_name) ? `https://${(systemglobal.no_media_cdn || (activeFiles.has(e.eid) && (activeFiles.get(e.eid)) >= 2)) ? 'cdn.discordapp.com' : 'media.discordapp.net'}/attachments/` + ((e.attachment_hash.includes('/')) ? e.attachment_hash : `${e.channel}/${e.attachment_hash}/${e.attachment_name}${(systemglobal.no_media_cdn || (activeFiles.has(e.eid) && (activeFiles.get(e.eid)) >= 2)) ? '' : getimageSizeParam()}`) : undefined) + '';
             return { url, ...e };
         })
         console.log(messages.length + ' items need to be tagged!')
         let downlaods = {}
         const existingFiles = [
             ...new Set([
-                ...fs.readdirSync(config.deepbooru_input_path).map(e => e.split('.')[0]),
-                ...fs.readdirSync(config.deepbooru_output_path).map(e => e.split('.')[0])
+                ...fs.readdirSync(systemglobal.deepbooru_input_path).map(e => e.split('.')[0]),
+                ...fs.readdirSync(systemglobal.deepbooru_output_path).map(e => e.split('.')[0])
             ])
         ]
         messages.filter(e => existingFiles.indexOf(e.eid.toString()) === -1).map((e,i) => { downlaods[i] = e });
         if (messages.length === 0)
             return true;
         while (Object.keys(downlaods).length !== 0) {
-            let downloadKeys = Object.keys(downlaods).slice(0,config.parallel_downloads || 25)
+            let downloadKeys = Object.keys(downlaods).slice(0,systemglobal.parallel_downloads || 25)
             console.log(`${Object.keys(downlaods).length} Left to download`)
             await Promise.all(downloadKeys.map(async k => {
                 const e = downlaods[k];
@@ -229,13 +478,13 @@
                                             }
                                         });
                                     })
-                                    if (config.allow_direct_write && mime.ext && ['png', 'jpg'].indexOf(mime.ext) !== -1) {
-                                        fs.writeFileSync(path.join(config.deepbooru_input_path, `${e.eid}.${mime.ext}`), body);
+                                    if (systemglobal.allow_direct_write && mime.ext && ['png', 'jpg'].indexOf(mime.ext) !== -1) {
+                                        fs.writeFileSync(path.join(systemglobal.deepbooru_input_path, `${e.eid}.${mime.ext}`), body);
                                         ok(true);
-                                    } else if ((!config.allow_direct_write && mime.ext && ['png', 'jpg', 'gif', 'tiff', 'webp'].indexOf(mime.ext) !== -1) || (mime.ext && ['gif', 'tiff', 'webp'].indexOf(mime.ext) !== -1)) {
+                                    } else if ((!systemglobal.allow_direct_write && mime.ext && ['png', 'jpg', 'gif', 'tiff', 'webp'].indexOf(mime.ext) !== -1) || (mime.ext && ['gif', 'tiff', 'webp'].indexOf(mime.ext) !== -1)) {
                                         await sharp(body)
                                             .toFormat('png')
-                                            .toFile(path.join(config.deepbooru_input_path, `${e.eid}.png`), (err, info) => {
+                                            .toFile(path.join(systemglobal.deepbooru_input_path, `query-${e.eid}.png`), (err, info) => {
                                                 if (err) {
                                                     console.error(`Failed to convert ${e.eid} to PNG file`, err);
                                                     ok(false);
@@ -280,7 +529,51 @@
         }
         return false;
     }
-    const resultsWatcher = chokidar.watch(config.deepbooru_output_path, {
+    async function parseResultsForMessage(key, results) {
+        if (key && results) {
+            return await new Promise(ok => {
+                LocalQueue.getItem(key)
+                    .then(data => {
+                        if (data) {
+                            const tags = Object.keys(results);
+                            const rules = ruleSets.get(data.message.messageChannelID);
+                            const result = (() => {
+                                if (rules && rules.accept && tags.filter(t => (rules.accept.indexOf(t) !== -1)).length === 0) {
+                                    console.error(`Did not find a approved tags "${tags.filter(t => rules.block.indexOf(t) !== -1).join(' ')}"`)
+                                    return false;
+                                }
+                                if (rules && rules.block && tags.filter(t => (rules.block.indexOf(t) !== -1)).length > 0) {
+                                    console.error(`Found a blocked tags "${tags.filter(t => rules.block.indexOf(t) !== -1).join(' ')}"`)
+                                    return false;
+                                }
+                                return true;
+                            })()
+                            if (result) {
+                                ok({
+                                    destination: `${systemglobal.mq_discord_out}${(data.queue !== 'normal') ? '.' + data.queue : ''}`,
+                                    message: {
+                                        fromDPS: `return.${facilityName}.${systemglobal.system_name}`,
+                                       ...data.message,
+                                       messageTags: Object.keys(results).map(k => `${modelTags.get(k) || 0}/${parseFloat(results[k]).toFixed(4)}/${k}`).join('; ')
+                                   }
+                                });
+                            } else {
+                                ok(false);
+                            }
+                        } else {
+                            console.error(`Unexpectedly Failed to get message data for key ${key}`)
+                            ok(false);
+                        }
+                    })
+                    .catch(err => {
+                        console.error(`Unexpectedly Failed to get message for key ${key}`, err)
+                        ok(false);
+                    })
+            })
+        }
+        return false;
+    }
+    const resultsWatcher = chokidar.watch(systemglobal.deepbooru_output_path, {
         ignored: /[\/\\]\./,
         persistent: true,
         usePolling: true,
@@ -293,20 +586,37 @@
     });
     resultsWatcher
         .on('add', async function (filePath) {
-            const eid = path.basename(filePath).split('.')[0];
-            const jsonFilePath = path.resolve(filePath)
-            const tagResults = JSON.parse(fs.readFileSync(jsonFilePath).toString());
-            console.error(`Entity ${eid} has ${Object.keys(tagResults).length} tags!`);
-            await sqlPromiseSafe(`UPDATE kanmi_records SET tags = ? WHERE eid = ?`, [ Object.keys(tagResults).map(k => `${modelTags.get(k) || 0}/${parseFloat(tagResults[k]).toFixed(4)}/${k}`).join('; '), eid ])
-            Object.keys(tagResults).map(async k => {
-                const r = tagResults[k];
-                await addTagForEid(eid, k, r);
-            });
-            fs.unlinkSync(jsonFilePath);
-            const imageFile = fs.readdirSync(config.deepbooru_input_path).filter(k => k.split('.')[0] === eid).pop();
-            if (imageFile)
-                fs.unlinkSync(path.join(config.deepbooru_input_path, (imageFile)));
-            activeFiles.delete(eid);
+            if (filePath.endsWith('.json') && filePath.startsWith('query-')) {
+                const eid = path.basename(filePath).split('.')[0];
+                const jsonFilePath = path.resolve(filePath);
+                const tagResults = JSON.parse(fs.readFileSync(jsonFilePath).toString());
+                console.error(`Entity ${eid} has ${Object.keys(tagResults).length} tags!`);
+                await sqlPromiseSafe(`UPDATE kanmi_records SET tags = ? WHERE eid = ?`, [ Object.keys(tagResults).map(k => `${modelTags.get(k) || 0}/${parseFloat(tagResults[k]).toFixed(4)}/${k}`).join('; '), eid ])
+                Object.keys(tagResults).map(async k => {
+                    const r = tagResults[k];
+                    await addTagForEid(eid, k, r);
+                });
+                fs.unlinkSync(jsonFilePath);
+                const imageFile = fs.readdirSync(systemglobal.deepbooru_input_path).filter(k => k.split('.')[0] === eid).pop();
+                if (imageFile)
+                    fs.unlinkSync(path.join(systemglobal.deepbooru_input_path, (imageFile)));
+                activeFiles.delete(eid);
+            } else if (filePath.endsWith('.json') && filePath.startsWith('message-')) {
+                const key = path.basename(filePath).split('message-').pop().split('.')[0];
+                const jsonFilePath = path.resolve(filePath);
+                const tagResults = JSON.parse(fs.readFileSync(jsonFilePath).toString());
+                console.error(`Message ${key} has ${Object.keys(tagResults).length} tags!`);
+                const approved = await parseResultsForMessage(key, tagResults);
+                if (approved) {
+                    mqClient.sendData( `${approved.destination}`, approved.message, function (ok) { });
+                    console.error(`Message ${key} was approved!`);
+                } else { console.error(`Message ${key} was denied!`); }
+                fs.unlinkSync(jsonFilePath);
+                const imageFile = fs.readdirSync(systemglobal.deepbooru_input_path)
+                    .filter(k => k.split('.')[0] === path.basename(filePath).split('.')[0]).pop();
+                if (imageFile)
+                    fs.unlinkSync(path.join(systemglobal.deepbooru_input_path, (imageFile)));
+            }
         })
         .on('error', function (error) {
             console.error(error);
@@ -355,6 +665,6 @@
         runTimer = setTimeout(parseUntilDone, 300000);
     }
 
-    await parseUntilDone(config.search);
+    await parseUntilDone(systemglobal.search);
     console.log("First pass completed!")
 })()
