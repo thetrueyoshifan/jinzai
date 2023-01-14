@@ -214,7 +214,11 @@
             try {
                 let msg = JSON.parse(Buffer.from(raw.content).toString('utf-8'));
                 const fileId = 'message-' + globalRunKey + '-' + DiscordSnowflake.generate();
-                if (ruleSets.has(msg.messageChannelID) && msg.messageType === 'sfile' && msg.itemFileData && msg.itemFileName && ['jpg', 'jpeg', 'jfif', 'png'].indexOf(msg.itemFileName.split('.').pop().toLowerCase()) !== -1) {
+                console.log({
+                    ...msg,
+                    itemFileData: (msg.itemFileData)
+                })
+                if (ruleSets.has(msg.messageChannelID.toString()) && msg.messageType === 'sfile' && msg.itemFileData && msg.itemFileName && ['jpg', 'jpeg', 'jfif', 'png'].indexOf(msg.itemFileName.split('.').pop().toLowerCase()) !== -1) {
                     Logger.printLine(`MessageProcessor`, `Process Message: (${queue}) From: ${msg.fromClient}, To Channel: ${msg.messageChannelID}`, "info");
                     LocalQueue.setItem(fileId, { id: fileId, queue, message: msg })
                         .then(async function () {
