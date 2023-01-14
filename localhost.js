@@ -687,7 +687,8 @@
             }
             if ((analyzerGroups && noResults === analyzerGroups.length) || (!analyzerGroups && noResults === 1))
                 break;
-            console.log('More work to be done, no sleep!');
+            console.log('More work to be done, waiting for sync...!');
+            await new Promise(done => setTimeout(() => { done(true) }, 60000))
         }
         console.log('Waiting for next run... Zzzzz')
         runTimer = setTimeout(parseUntilDone, 300000);
