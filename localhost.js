@@ -226,7 +226,7 @@
                     Logger.printLine(`MessageProcessor`, `Process Message: (${queue}) From: ${msg.fromClient}, To Channel: ${msg.messageChannelID}`, "info");
                     LocalQueue.setItem(fileId, { id: fileId, queue, message: msg })
                         .then(async function () {
-                            await sharp(new Buffer.from(msg.itemFileData))
+                            await sharp(new Buffer.from(msg.itemFileData, 'base64'))
                                 .toFormat('png')
                                 .toFile(path.join(systemglobal.deepbooru_input_path, `${fileId}.png`), (err, info) => {
                                     if (err) {
