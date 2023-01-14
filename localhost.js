@@ -578,6 +578,7 @@
                                 }
                                 return true;
                             })()
+                            console.log(result)
                             if (result) {
                                 ok({
                                     destination: `${systemglobal.mq_discord_out}${(data.queue !== 'normal') ? '.' + data.queue : ''}`,
