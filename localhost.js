@@ -2,7 +2,7 @@
     const systemglobal = require('./config.json');
     if (process.env.SYSTEM_NAME && process.env.SYSTEM_NAME.trim().length > 0)
         systemglobal.system_name = process.env.SYSTEM_NAME.trim()
-    const facilityName = 'Mugino-Ctrl';
+    const facilityName = 'MuginoMIITS';
 
     const md5 = require('md5');
     const cron = require('node-cron');
@@ -562,7 +562,6 @@
             return await new Promise(ok => {
                 LocalQueue.getItem(key)
                     .then(data => {
-                        console.log(data)
                         if (data.message) {
                             const tags = Object.keys(results);
                             const rules = ruleSets.get(data.message.messageChannelID);
