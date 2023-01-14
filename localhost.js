@@ -218,10 +218,10 @@
             try {
                 const msg = JSON.parse(Buffer.from(raw.content).toString('utf-8'));
                 const fileId = globalRunKey + '-' + DiscordSnowflake.generate();
-                console.log({
+                /*console.log({
                     ...msg,
                     itemFileData: (msg.itemFileData) ? 'true' : 'false'
-                })
+                })*/
                 if (ruleSets.has(msg.messageChannelID.toString()) && msg.messageType === 'sfile' && msg.itemFileData && msg.itemFileName && ['jpg', 'jpeg', 'jfif', 'png'].indexOf(msg.itemFileName.split('.').pop().toLowerCase()) !== -1) {
                     Logger.printLine(`MessageProcessor`, `Process Message: (${queue}) From: ${msg.fromClient}, To Channel: ${msg.messageChannelID}`, "info");
                     LocalQueue.setItem(fileId, { id: fileId, queue, message: msg })
@@ -658,11 +658,10 @@
     async function parseUntilDone(analyzerGroups) {
         while (true) {
             let noResults = 0;
-            if (analyzerGroups) {
+            if (analyzerGroups.length > 0) {
                 await new Promise(completed => {
                     let requests = analyzerGroups.reduce((promiseChain, w) => {
                         return promiseChain.then(() => new Promise(async (resolve) => {
-                            console.log(`Searching for "${JSON.stringify(w)}"...`)
                             const _r = await queryForTags(w);
                             if (_r)
                                 noResults++;
@@ -686,7 +685,7 @@
                 await queryImageTags();
                 console.log('MIITS Tagger finished!');
             }
-            if ((analyzerGroups && noResults === analyzerGroups.length) || (!analyzerGroups && noResults === 1))
+            if ((analyzerGroups && noResults === analyzerGroups.length) || (analyzerGroups.length === 0 && noResults === 1))
                 break;
             console.log('More work to be done, no sleep!');
         }
@@ -694,6 +693,7 @@
         runTimer = setTimeout(parseUntilDone, 300000);
     }
 
-    await parseUntilDone(systemglobal.search);
+    if (systemglobal.search)
+        await parseUntilDone(systemglobal.search);
     console.log("First pass completed!")
 })()
