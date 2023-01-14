@@ -216,7 +216,7 @@
         }
         async function work(raw, queue, cb) {
             try {
-                let msg = JSON.parse(Buffer.from(raw.content).toString('utf-8'));
+                const msg = JSON.parse(Buffer.from(raw.content).toString('utf-8'));
                 const fileId = 'message-' + globalRunKey + '-' + DiscordSnowflake.generate();
                 console.log({
                     ...msg,
