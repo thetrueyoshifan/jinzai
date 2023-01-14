@@ -230,7 +230,8 @@
                                 .toFormat('png')
                                 .toFile(path.join(systemglobal.deepbooru_input_path, `${fileId}.png`), (err, info) => {
                                     if (err) {
-                                        Logger.printLine("SaveFile", `Error when saving the file ${fileId}`, "error", err)
+                                        Logger.printLine("SaveFile", `Error when saving the file ${fileId}`, "error")
+                                        console.error(err);
                                         mqClient.sendData( `${systemglobal.mq_discord_out}${(queue !== 'normal') ? '.' + queue : ''}`, msg, function (ok) {
                                             cb(ok);
                                         });
