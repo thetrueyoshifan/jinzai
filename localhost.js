@@ -645,6 +645,7 @@
                     .filter(k => k.split('.')[0] === path.basename(filePath).split('.')[0]).pop();
                 if (imageFile)
                     fs.unlinkSync(path.join(systemglobal.deepbooru_input_path, (imageFile)));
+                LocalQueue.removeItem(key);
             }
         })
         .on('error', function (error) {
