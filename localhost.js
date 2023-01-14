@@ -565,8 +565,9 @@
                         if (data.message) {
                             const tags = Object.keys(results);
                             const rules = ruleSets.get(data.message.messageChannelID);
-                            console.log(rules)
+                            console.log(rules.block)
                             console.log(tags)
+                            console.log(tags.filter(t => (rules.block.indexOf(t) !== -1)))
                             const result = (() => {
                                 if (rules && rules.accept && tags.filter(t => (rules.accept.indexOf(t) !== -1)).length === 0) {
                                     console.error(`Did not find a approved tags "${tags.filter(t => rules.block.indexOf(t) !== -1).join(' ')}"`)
