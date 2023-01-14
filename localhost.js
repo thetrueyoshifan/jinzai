@@ -73,6 +73,8 @@
 
     const ruleSets = new Map();
 
+    let startEvaluating = null;
+
     if (systemglobal.mq_mugino_in) {
         //const RateLimiter = require('limiter').RateLimiter;
         //const limiter = new RateLimiter(5, 5000);
@@ -234,6 +236,9 @@
                                         });
                                     } else {
                                         cb(true);
+                                        clearTimeout(startEvaluating);
+                                        startEvaluating = null;
+                                        startEvaluating = setTimeout(queryImageTags, 60000)
                                     }
                                 })
                         })
@@ -326,40 +331,53 @@
             eid, tagId, rating, rating
         ])
     }
+    let mittsIsActive = false;
     async function queryImageTags() {
-        console.log('Processing image tags via MIITS Client...')
-        return new Promise(async (resolve) => {
-            const startTime = Date.now();
-            (fs.readdirSync(systemglobal.deepbooru_input_path))
-                .filter(e => fs.existsSync(path.join(systemglobal.deepbooru_output_path, `${e.split('.')[0]}.json`)) || (fs.statSync(path.resolve(systemglobal.deepbooru_input_path, e))).size <= 16 )
-                .map(e => fs.unlinkSync(path.resolve(systemglobal.deepbooru_input_path, e)))
-            if ((fs.readdirSync(systemglobal.deepbooru_input_path)).length > 0) {
-                let ddOptions = ['evaluate', systemglobal.deepbooru_input_path, '--project-path', systemglobal.deepbooru_model_path, '--allow-folder', '--save-json', '--save-path', systemglobal.deepbooru_output_path, '--no-tag-output']
-                if (systemglobal.deepbooru_gpu)
-                    ddOptions.push('--allow-gpu')
-                console.log(ddOptions.join(' '))
-                const muginoMeltdown = spawn(((systemglobal.deepbooru_exec) ? systemglobal.deepbooru_exec : 'deepbooru'), ddOptions, { encoding: 'utf8' })
+        if (startEvaluating) {
+            clearTimeout(startEvaluating);
+            startEvaluating = null;
+        }
+        if (!mittsIsActive) {
+            mittsIsActive = true;
+            console.log('Processing image tags via MIITS Client...')
+            return new Promise(async (resolve) => {
+                const startTime = Date.now();
+                (fs.readdirSync(systemglobal.deepbooru_input_path))
+                    .filter(e => fs.existsSync(path.join(systemglobal.deepbooru_output_path, `${e.split('.')[0]}.json`)) || (fs.statSync(path.resolve(systemglobal.deepbooru_input_path, e))).size <= 16)
+                    .map(e => fs.unlinkSync(path.resolve(systemglobal.deepbooru_input_path, e)))
+                if ((fs.readdirSync(systemglobal.deepbooru_input_path)).length > 0) {
+                    let ddOptions = ['evaluate', systemglobal.deepbooru_input_path, '--project-path', systemglobal.deepbooru_model_path, '--allow-folder', '--save-json', '--save-path', systemglobal.deepbooru_output_path, '--no-tag-output']
+                    if (systemglobal.deepbooru_gpu)
+                        ddOptions.push('--allow-gpu')
+                    console.log(ddOptions.join(' '))
+                    const muginoMeltdown = spawn(((systemglobal.deepbooru_exec) ? systemglobal.deepbooru_exec : 'deepbooru'), ddOptions, {encoding: 'utf8'})
 
-                if (!systemglobal.deepbooru_no_log)
-                    muginoMeltdown.stdout.on('data', (data) => console.log(data.toString().trim().split('\n').filter(e => e.trim().length > 1 && !e.trim().includes('===] ')).join('\n')))
-                muginoMeltdown.stderr.on('data', (data) => console.error(data.toString()));
-                muginoMeltdown.on('close', (code, signal) => {
-                    (fs.readdirSync(systemglobal.deepbooru_input_path))
-                        .filter(e => fs.existsSync(path.join(systemglobal.deepbooru_output_path, `${e.split('.')[0]}.json`)))
-                        .map(e => fs.unlinkSync(path.resolve(systemglobal.deepbooru_input_path, e)))
-                    if (code !== 0) {
-                        console.error(`Mugino Meltdown! MIITS reported a error during tagging operation!`);
-                        resolve(false)
-                    } else {
-                        console.log(`Tagging Completed in ${((Date.now() - startTime) / 1000).toFixed(0)} sec!`);
-                        resolve(true)
-                    }
-                })
-            } else {
-                console.info(`There are no file that need to be tagged!`);
-                resolve(true)
-            }
-        })
+                    if (!systemglobal.deepbooru_no_log)
+                        muginoMeltdown.stdout.on('data', (data) => console.log(data.toString().trim().split('\n').filter(e => e.trim().length > 1 && !e.trim().includes('===] ')).join('\n')))
+                    muginoMeltdown.stderr.on('data', (data) => console.error(data.toString()));
+                    muginoMeltdown.on('close', (code, signal) => {
+                        (fs.readdirSync(systemglobal.deepbooru_input_path))
+                            .filter(e => fs.existsSync(path.join(systemglobal.deepbooru_output_path, `${e.split('.')[0]}.json`)))
+                            .map(e => fs.unlinkSync(path.resolve(systemglobal.deepbooru_input_path, e)))
+                        if (code !== 0) {
+                            console.error(`Mugino Meltdown! MIITS reported a error during tagging operation!`);
+                            mittsIsActive = false;
+                            resolve(false)
+                        } else {
+                            console.log(`Tagging Completed in ${((Date.now() - startTime) / 1000).toFixed(0)} sec!`);
+                            mittsIsActive = false;
+                            resolve(true)
+                        }
+                    })
+                } else {
+                    console.info(`There are no file that need to be tagged!`);
+                    mittsIsActive = false;
+                    resolve(true)
+                }
+            })
+        } else {
+            return true;
+        }
     }
     async function queryForTags(analyzerGroup) {
         const sqlFields = [
