@@ -217,7 +217,7 @@
         async function work(raw, queue, cb) {
             try {
                 const msg = JSON.parse(Buffer.from(raw.content).toString('utf-8'));
-                const fileId = 'message-' + globalRunKey + '-' + DiscordSnowflake.generate();
+                const fileId = globalRunKey + '-' + DiscordSnowflake.generate();
                 console.log({
                     ...msg,
                     itemFileData: (msg.itemFileData) ? 'true' : 'false'
@@ -228,7 +228,7 @@
                         .then(async function () {
                             await sharp(new Buffer.from(msg.itemFileData, 'base64'))
                                 .toFormat('png')
-                                .toFile(path.join(systemglobal.deepbooru_input_path, `${fileId}.png`), (err, info) => {
+                                .toFile(path.join(systemglobal.deepbooru_input_path, `message-${fileId}.png`), (err, info) => {
                                     if (err) {
                                         Logger.printLine("SaveFile", `Error when saving the file ${fileId}`, "error")
                                         console.error(err);
