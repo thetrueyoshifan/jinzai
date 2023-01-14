@@ -587,7 +587,7 @@
     resultsWatcher
         .on('add', async function (filePath) {
             if (filePath.endsWith('.json') && filePath.startsWith('query-')) {
-                const eid = path.basename(filePath).split('.')[0];
+                const eid = path.basename(filePath).split('query-').pop().split('.')[0];
                 const jsonFilePath = path.resolve(filePath);
                 const tagResults = JSON.parse(fs.readFileSync(jsonFilePath).toString());
                 console.error(`Entity ${eid} has ${Object.keys(tagResults).length} tags!`);
