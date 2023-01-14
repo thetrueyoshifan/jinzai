@@ -93,8 +93,8 @@
         const MQWorker2 = `${MQWorker1}.priority`
         const MQWorker3 = `${MQWorker1}.backlog`
 
-        if (systemglobal.mq_rules)
-            systemglobal.mq_rules.map(async rule => { rule.channels.map(ch => { ruleSets.set(ch, rule) }) })
+        if (systemglobal.rules)
+            systemglobal.rules.map(async rule => { rule.channels.map(ch => { ruleSets.set(ch, rule) }) })
 
         console.log(ruleSets.size + ' configured rules')
 
