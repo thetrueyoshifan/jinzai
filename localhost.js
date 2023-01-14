@@ -93,9 +93,8 @@
         const MQWorker2 = `${MQWorker1}.priority`
         const MQWorker3 = `${MQWorker1}.backlog`
 
-        systemglobal.mq_rules.map(async rule => {
-            rule.channels.map(ch => { ruleSets.set(ch, rule) })
-        })
+        if (systemglobal.mq_rules)
+            systemglobal.mq_rules.map(async rule => { rule.channels.map(ch => { ruleSets.set(ch, rule) }) })
 
         function startWorker() {
             amqpConn.createChannel(function(err, ch) {
