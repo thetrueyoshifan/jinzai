@@ -18,6 +18,7 @@
     const Logger = require('./utils/logSystem');
     const mqClient = require('./utils/mqAccess');
     const { DiscordSnowflake } = require('@sapphire/snowflake');
+    const crypto = require('crypto');
     const globalRunKey = crypto.randomBytes(5).toString("hex");
     const Discord_CDN_Accepted_Files = ['jpg','jpeg','jfif','png','webp','gif'];
 
@@ -72,7 +73,7 @@
 
     const ruleSets = new Map();
 
-    if (systemglobal.mq_host) {
+    if (systemglobal.mq_mugino_in) {
         //const RateLimiter = require('limiter').RateLimiter;
         //const limiter = new RateLimiter(5, 5000);
         //const limiterlocal = new RateLimiter(1, 1000);
