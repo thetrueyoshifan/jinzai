@@ -562,7 +562,8 @@
             return await new Promise(ok => {
                 LocalQueue.getItem(key)
                     .then(data => {
-                        if (data) {
+                        console.log(data)
+                        if (data.message) {
                             const tags = Object.keys(results);
                             const rules = ruleSets.get(data.message.messageChannelID);
                             const result = (() => {
