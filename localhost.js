@@ -96,6 +96,8 @@
         if (systemglobal.mq_rules)
             systemglobal.mq_rules.map(async rule => { rule.channels.map(ch => { ruleSets.set(ch, rule) }) })
 
+        console.log(ruleSets.size + ' configured rules')
+
         function startWorker() {
             amqpConn.createChannel(function(err, ch) {
                 if (closeOnErr(err)) return;
@@ -216,7 +218,7 @@
                 const fileId = 'message-' + globalRunKey + '-' + DiscordSnowflake.generate();
                 console.log({
                     ...msg,
-                    itemFileData: (msg.itemFileData)
+                    itemFileData: (msg.itemFileData) ? 'true' : 'false'
                 })
                 if (ruleSets.has(msg.messageChannelID.toString()) && msg.messageType === 'sfile' && msg.itemFileData && msg.itemFileName && ['jpg', 'jpeg', 'jfif', 'png'].indexOf(msg.itemFileName.split('.').pop().toLowerCase()) !== -1) {
                     Logger.printLine(`MessageProcessor`, `Process Message: (${queue}) From: ${msg.fromClient}, To Channel: ${msg.messageChannelID}`, "info");

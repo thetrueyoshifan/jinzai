@@ -13,3 +13,59 @@ Simple wrapper for DeepDanbooru to process images from Sequenzia and retrieve ta
 
 ## Important Tagging Warning
 Sequenzia tagging is done "on the fly" to reduce the number of unnecessary tags that may never be used and just take up table space. Tag IDs WILL NOT match danbooru IDs! 
+
+## Example Configuration File - config.json
+```json
+{
+  "system_name": "HOSTNAME",
+  "sql_host": "",
+  "mq_host": "",
+  "log_host" : [],
+  "sql_database": "kanmi_system",
+  "sql_user": "",
+  "sql_pass": "",
+  "mq_user": "",
+  "mq_pass": "",
+  "mq_discord_out": "outbox.discord",
+  "mq_mugino_in": "inbox.mugino",
+  "search": [
+    {
+	  "class": ["review"],
+	  "limit": 4000
+    },
+    {
+	  "class": ["cosplay", "art", "photo"],
+	  "limit": 5000
+    }
+  ],
+  "rules": [
+	{
+		"channels": [
+			"863820375723606046"
+		]
+	},
+	{
+		"channels": [
+			"965828904629710878",
+			"964390001104257044",
+			"965828904629710878",
+			"968624369456775258",
+			"863820375723606046",
+			"964390001104257044"
+		],
+		"block": [
+			"no_humans",
+			"user_interface",
+			"phone_screen"
+		]
+	}
+  ],
+  "pull_limit": 4000,
+  "parallel_downloads": 25,
+  "deepbooru_exec": "C:\\Users\\ykaza\\AppData\\Local\\Programs\\Python\\Python37\\Scripts\\deepdanbooru.exe",
+  "deepbooru_gpu": true,
+  "deepbooru_model_path": "./model/",
+  "deepbooru_input_path": "./temp/",
+  "deepbooru_output_path": "./results/"
+}
+```
