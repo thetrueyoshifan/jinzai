@@ -287,6 +287,8 @@
                 process.send('ready');
             init = true
         }
+
+        start();
     }
 
     async function clearFolder(folderPath) {
