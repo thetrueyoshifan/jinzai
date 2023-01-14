@@ -586,7 +586,7 @@
     });
     resultsWatcher
         .on('add', async function (filePath) {
-            if (filePath.endsWith('.json') && filePath.startsWith('query-')) {
+            if (filePath.split('/').pop().split('\\').pop().endsWith('.json') && filePath.split('/').pop().split('\\').pop().startsWith('query-')) {
                 const eid = path.basename(filePath).split('query-').pop().split('.')[0];
                 const jsonFilePath = path.resolve(filePath);
                 const tagResults = JSON.parse(fs.readFileSync(jsonFilePath).toString());
@@ -601,7 +601,7 @@
                 if (imageFile)
                     fs.unlinkSync(path.join(systemglobal.deepbooru_input_path, (imageFile)));
                 activeFiles.delete(eid);
-            } else if (filePath.endsWith('.json') && filePath.startsWith('message-')) {
+            } else if (filePath.split('/').pop().split('\\').pop().endsWith('.json') && filePath.split('/').pop().split('\\').pop().startsWith('message-')) {
                 const key = path.basename(filePath).split('message-').pop().split('.')[0];
                 const jsonFilePath = path.resolve(filePath);
                 const tagResults = JSON.parse(fs.readFileSync(jsonFilePath).toString());
