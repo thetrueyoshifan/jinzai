@@ -658,7 +658,7 @@
     async function parseUntilDone(analyzerGroups) {
         while (true) {
             let noResults = 0;
-            if (analyzerGroups.length > 0) {
+            if (analyzerGroups) {
                 await new Promise(completed => {
                     let requests = analyzerGroups.reduce((promiseChain, w) => {
                         return promiseChain.then(() => new Promise(async (resolve) => {
@@ -685,7 +685,7 @@
                 await queryImageTags();
                 console.log('MIITS Tagger finished!');
             }
-            if ((analyzerGroups && noResults === analyzerGroups.length) || (analyzerGroups.length === 0 && noResults === 1))
+            if ((analyzerGroups && noResults === analyzerGroups.length) || (!analyzerGroups && noResults === 1))
                 break;
             console.log('More work to be done, no sleep!');
         }
