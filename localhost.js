@@ -94,6 +94,9 @@
 
     let startEvaluating = null;
     let startUpscaleing = null;
+    let gpuLocked = false;
+    let upscaleIsActive = false;
+    let mittsIsActive = false;
 
     if (systemglobal.mq_mugino_in) {
         //const RateLimiter = require('limiter').RateLimiter;
@@ -499,7 +502,6 @@
             eid, tagId, rating, rating
         ])
     }
-    let gpuLocked = false;
     async function processGPUWorkloads() {
         if (startEvaluating) {
             clearTimeout(startEvaluating);
@@ -514,7 +516,6 @@
             return false;
         }
     }
-    let upscaleIsActive = false;
     async function upscaleImages() {
         if (!upscaleIsActive) {
             upscaleIsActive = true;
@@ -591,7 +592,6 @@
             return true;
         }
     }
-    let mittsIsActive = false;
     async function queryImageTags() {
         if (!mittsIsActive) {
             mittsIsActive = true;
