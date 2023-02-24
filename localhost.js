@@ -12,6 +12,8 @@
     const chokidar = require('chokidar');
     const fileType = require('detect-file-type');
     const sharp = require('sharp');
+    const splitFile = require('split-file');
+    const rimraf = require('rimraf');
     const storageHandler = require('node-persist');
     const request = require('request').defaults({ encoding: null, jar: true });
     const {sqlPromiseSafe, sqlPromiseSimple} = require("./utils/sqlClient");
@@ -70,10 +72,28 @@
             Logger.printLine("LocalQueue", "Initialized successfully the local request storage", "debug", err)
         }
     });
+    const UpscaleQueue = storageHandler.create({
+        dir: 'data/UpscaleQueue',
+        stringify: JSON.stringify,
+        parse: JSON.parse,
+        encoding: 'utf8',
+        logging: false,
+        ttl: false,
+        expiredInterval: 2 * 60 * 1000, // every 2 minutes the process will clean-up the expired cache
+        forgiveParseErrors: false
+    });
+    UpscaleQueue.init((err) => {
+        if (err) {
+            Logger.printLine("UpscaleQueue", "Failed to initialize the upscale request storage", "error", err)
+        } else {
+            Logger.printLine("UpscaleQueue", "Initialized successfully the upscale request storage", "debug", err)
+        }
+    });
 
     const ruleSets = new Map();
 
     let startEvaluating = null;
+    let startUpscaleing = null;
 
     if (systemglobal.mq_mugino_in) {
         //const RateLimiter = require('limiter').RateLimiter;
@@ -222,7 +242,142 @@
                     ...msg,
                     itemFileData: (msg.itemFileData) ? 'true' : 'false'
                 })*/
-                if (msg.messageType === 'sfile' && msg.itemFileData && msg.itemFileName && ['jpg', 'jpeg', 'jfif', 'png'].indexOf(msg.itemFileName.split('.').pop().toLowerCase()) !== -1) {
+
+                if (msg.messageType === 'command' && msg.messageEID) {
+                    Logger.printLine(`MessageProcessor`, `Command Message: (${queue}) Action: ${msg.messageAction}, From: ${msg.fromClient}, To Channel: ${msg.messageChannelID}`, "info");
+                    switch (msg.messageAction) {
+                        case 'Upscale':
+                            db.safe(`SELECT x.*, y.data FROM (SELECT r.*, m.url, m.valid FROM (SELECT kanmi_records.* FROM kanmi_records WHERE kanmi_records.eid = ? AND kanmi_records.source = 0) r LEFT JOIN (SELECT url, valid, fileid FROM discord_multipart_files) m ON r.fileid = m.fileid) x LEFT OUTER JOIN (SELECT * FROM kanmi_records_extended) y ON (x.eid = y.eid)`, [MessageContents.messageEID], function (err, cacheresponse) {
+                                if (err || cacheresponse.length === 0) {
+                                    Logger.printLine("MPFDownload", `File not found!`, "error")
+                                    cb(true)
+                                } else if (cacheresponse[0].fileid && cacheresponse.filter(e => e.valid === 0 && !(!e.url)).length !== 0) {
+                                    Logger.printLine("MPFDownload", `Failed to proccess the MultiPart File ${cacheresponse.real_filename} (${MessageContents.fileUUID})\nSome files are not valid and will need to be revalidated or repaired!`, "error")
+                                    cb(true)
+                                } else if (cacheresponse[0].fileid && cacheresponse.filter(e => e.valid === 1 && !(!e.url)).length !== cacheresponse[0].paritycount) {
+                                    Logger.printLine("MPFDownload", `Failed to proccess the MultiPart File ${cacheresponse.real_filename} (${MessageContents.fileUUID})\nThe expected number of parity files were not available. \nTry to repair the parity cache \`juzo jfs repair parts\``, "error")
+                                    cb(true)
+                                } else if (cacheresponse[0].fileid && ['jpg', 'jpeg', 'jfif', 'png'].indexOf(cacheresponse[0].real_filename.split('.').pop().toLowerCase()) !== -1) {
+                                    let itemsCompleted = [];
+                                    const fileName = `upscale-${fileId}.${cacheresponse[0].real_filename.split('.').pop().toLowerCase()}`
+                                    const CompleteFilename = path.join(systemglobal.waifu2x_input_path, fileName);
+                                    const PartsFilePath = path.join(systemglobal.mpf_temp, `PARITY-${cacheresponse[0].fileid}`);
+                                    fs.mkdirSync(PartsFilePath, {recursive: true})
+                                    let requests = cacheresponse.filter(e => e.valid === 1 && !(!e.url)).map(e => e.url).sort((x, y) => (x.split('.').pop() < y.split('.').pop()) ? -1 : (y.split('.').pop() > x.split('.').pop()) ? 1 : 0).reduce((promiseChain, URLtoGet, URLIndex) => {
+                                        return promiseChain.then(() => new Promise((resolve) => {
+                                            const DestFilename = path.join(PartsFilePath, `${URLIndex}.par`)
+                                            const stream = request.get({
+                                                url: URLtoGet,
+                                                headers: {
+                                                    'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+                                                    'accept-language': 'en-US,en;q=0.9',
+                                                    'cache-control': 'max-age=0',
+                                                    'sec-ch-ua': '"Chromium";v="92", " Not A;Brand";v="99", "Microsoft Edge";v="92"',
+                                                    'sec-ch-ua-mobile': '?0',
+                                                    'sec-fetch-dest': 'document',
+                                                    'sec-fetch-mode': 'navigate',
+                                                    'sec-fetch-site': 'none',
+                                                    'sec-fetch-user': '?1',
+                                                    'upgrade-insecure-requests': '1',
+                                                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.131 Safari/537.36 Edg/92.0.902.73'
+                                                },
+                                            }).pipe(fs.createWriteStream(DestFilename))
+                                            // Write File to Temp Filesystem
+                                            stream.on('finish', function () {
+                                                Logger.printLine("MPFDownload", `Downloaded Part #${URLIndex} : ${DestFilename}`, "debug", {
+                                                    URL: URLtoGet,
+                                                    DestFilename: DestFilename,
+                                                    CompleteFilename: fileName
+                                                })
+                                                itemsCompleted.push(DestFilename);
+                                                resolve()
+                                            });
+                                            stream.on("error", function (err) {
+                                                Logger.printLine("MPFDownload", `Part of the multipart file failed to download! ${URLtoGet}`, "err", "MPFDownload", "error", err)
+                                                resolve()
+                                            })
+                                        }))
+                                    }, Promise.resolve());
+                                    requests.then(async () => {
+                                        if (itemsCompleted.length === cacheresponse[0].paritycount) {
+                                            await new Promise((deleted) => {
+                                                rimraf(CompleteFilename, function (err) { deleted(!err) });
+                                            })
+                                            try {
+                                                await splitFile.mergeFiles(itemsCompleted.sort(function (a, b) {
+                                                    return a - b
+                                                }), CompleteFilename)
+                                                Logger.printLine("MPFDownload", `File "${fileName.replace(/[/\\?%*:|"<> ]/g, '_')}" was build successfully!`, "info")
+                                                await new Promise((deleted) => {
+                                                    rimraf(PartsFilePath, function (err) { deleted(!err) });
+                                                })
+
+                                                cb(true)
+                                            } catch (err) {
+                                                Logger.printLine("MPFDownload", `File ${cacheresponse[0].real_filename} failed to rebuild!`, "err", err)
+                                                console.error(err)
+                                                for (let part of itemsCompleted) {
+                                                    fs.unlink(part, function (err) {
+                                                        if (err && (err.code === 'EBUSY' || err.code === 'ENOENT')) {
+                                                            //mqClient.sendMessage(`Error removing file part from temporary folder! - ${err.message}`, "err", "MPFDownload", err)
+                                                        }
+                                                    })
+                                                }
+                                                cb(true)
+                                            }
+                                        } else {
+                                            Logger.printLine("MPFDownload", `Failed to proccess the MultiPart File ${fileId} (${MessageContents.fileUUID})\nThe expected number of parity files did not all download or save.`, "error")
+                                            cb(true)
+                                        }
+                                    })
+                                } else if (!cacheresponse[0].fileid && ['jpg', 'jpeg', 'jfif', 'png'].indexOf(cacheresponse[0].real_filename.split('.').pop().toLowerCase()) !== -1) {
+                                    UpscaleQueue.setItem(fileId, { id: fileId, queue, message: msg })
+                                        .then(async function () {
+                                            const URLtoGet = (( cacheresponse[0].cache_proxy) ? cacheresponse[0].cache_proxy.startsWith('http') ? cacheresponse[0].cache_proxy : `https://cdn.discordapp.com/attachments${cacheresponse[0].cache_proxy}` : (cacheresponse[0].attachment_hash && cacheresponse[0].attachment_name) ? `https://cdn.discordapp.com/attachments/` + ((cacheresponse[0].attachment_hash.includes('/')) ? cacheresponse[0].attachment_hash : `${cacheresponse[0].channel}/${cacheresponse[0].attachment_hash}/${cacheresponse[0].attachment_name}`) : undefined) + ''
+                                            const filePath = path.join(systemglobal.waifu2x_input_path, `upscale-${fileId}.${cacheresponse[0].real_filename.split('.').pop().toLowerCase()}`)
+                                            const stream = request.get({
+                                                url: URLtoGet,
+                                                headers: {
+                                                    'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+                                                    'accept-language': 'en-US,en;q=0.9',
+                                                    'cache-control': 'max-age=0',
+                                                    'sec-ch-ua': '"Chromium";v="92", " Not A;Brand";v="99", "Microsoft Edge";v="92"',
+                                                    'sec-ch-ua-mobile': '?0',
+                                                    'sec-fetch-dest': 'document',
+                                                    'sec-fetch-mode': 'navigate',
+                                                    'sec-fetch-site': 'none',
+                                                    'sec-fetch-user': '?1',
+                                                    'upgrade-insecure-requests': '1',
+                                                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.131 Safari/537.36 Edg/92.0.902.73'
+                                                },
+                                            }).pipe(fs.createWriteStream(filePath))
+                                            // Write File to Temp Filesystem
+                                            stream.on('finish', async function () {
+                                                cb(true);
+                                                clearTimeout(startEvaluating);
+                                                startEvaluating = null;
+                                                startEvaluating = setTimeout(processGPUWorkloads, 60000)
+                                            });
+                                            stream.on("error", function (err) {
+                                                Logger.printLine("MPFDownload", `File failed to download! ${URLtoGet}`, "error", err)
+                                                cb(true)
+                                            })
+                                        })
+                                        .catch(function (err) {
+                                            Logger.printLine(`MessageProcessor`, `Failed to set save message`, `error`, err)
+                                            cb(false);
+                                        })
+                                } else {
+                                    Logger.printLine("MPFDownload", `File format is not supported!`, "error")
+                                    cb(true)
+                                }
+                            })
+                            break;
+                        default:
+                            cb(true);
+                            break;
+                    }
+                } else if (msg.messageType === 'sfile' && msg.itemFileData && msg.itemFileName && ['jpg', 'jpeg', 'jfif', 'png'].indexOf(msg.itemFileName.split('.').pop().toLowerCase()) !== -1) {
                     Logger.printLine(`MessageProcessor`, `Process Message: (${queue}) From: ${msg.fromClient}, To Channel: ${msg.messageChannelID}`, "info");
                     LocalQueue.setItem(fileId, { id: fileId, queue, message: msg })
                         .then(async function () {
@@ -239,11 +394,14 @@
                                         cb(true);
                                         clearTimeout(startEvaluating);
                                         startEvaluating = null;
-                                        startEvaluating = setTimeout(queryImageTags, 60000)
+                                        startEvaluating = setTimeout(processGPUWorkloads, 60000)
                                     }
                                 })
                         })
                         .catch(function (err) {
+                            mqClient.sendData( `${systemglobal.mq_discord_out}${(queue !== 'normal') ? '.' + queue : ''}`, msg, function (ok) {
+                                cb(ok);
+                            });
                             Logger.printLine(`MessageProcessor`, `Failed to set save message`, `error`, err)
                             cb(false);
                         })
@@ -332,12 +490,100 @@
             eid, tagId, rating, rating
         ])
     }
-    let mittsIsActive = false;
-    async function queryImageTags() {
+    let gpuLocked = false;
+    async function processGPUWorkloads() {
         if (startEvaluating) {
             clearTimeout(startEvaluating);
             startEvaluating = null;
         }
+        if (!gpuLocked) {
+            if (systemglobal.deepbooru_exec)
+                await queryImageTags();
+            if (systemglobal.waifu2x_exec)
+                await upscaleImages();
+        } else {
+            return false;
+        }
+    }
+    let upscaleIsActive = false;
+    async function upscaleImages() {
+        if (!upscaleIsActive) {
+            upscaleIsActive = true;
+            console.log('Processing image upscale via MIITS Client...')
+            return new Promise(async (resolve) => {
+                const startTime = Date.now();
+                (fs.readdirSync(systemglobal.waifu2x_input_path))
+                    .filter(e => fs.existsSync(path.join(systemglobal.deepbooru_output_path, `${e.split('.')[0]}.png`)) || fs.existsSync(path.join(systemglobal.deepbooru_output_path, `${e.split('.')[0]}.jpg`)) || (fs.statSync(path.resolve(systemglobal.waifu2x_input_path, e))).size <= 16)
+                    .map(e => fs.unlinkSync(path.resolve(systemglobal.waifu2x_input_path, e)))
+                if ((fs.readdirSync(systemglobal.waifu2x_input_path)).length > 0) {
+                    await new Promise(completed => {
+                        let requests = (fs.readdirSync(systemglobal.waifu2x_input_path)).reduce((promiseChain, e) => {
+                            return promiseChain.then(() => new Promise(async (resolve) => {
+                                const key = e.split('.')[0].split('upscale-').pop();
+                                UpscaleQueue.getItem(key)
+                                    .then(data => {
+                                        if (data.parameters) {
+                                            let w2xOptions = [
+                                                (systemglobal.waifu2x_exec_input_parameter || '-i'),
+                                                path.join(systemglobal.waifu2x_input_path, e),
+                                                (systemglobal.waifu2x_exec_output_parameter || '-o'),
+                                                path.join(systemglobal.deepbooru_output_path, `${e.split('.')[0]}.${systemglobal.waifu2x_exec_format_options[data.parameters.image_format || 0]}`),
+                                                (systemglobal.waifu2x_exec_noise_parameter || '-n'),
+                                                systemglobal.waifu2x_exec_noise_options[data.parameters.noise_level || 0],
+                                                (systemglobal.waifu2x_exec_size_parameter || '-s'),
+                                                systemglobal.waifu2x_exec_size_options[data.parameters.scale_level || 0],
+                                                (systemglobal.waifu2x_exec_format_parameter || '-f'),
+                                                systemglobal.waifu2x_exec_format_options[data.parameters.image_format || 0],
+                                                ...(systemglobal.waifu2x_exec_additional_options || [])
+                                            ]
+                                            console.log(w2xOptions.join(' '))
+                                            const muginoMeltdown = spawn(((systemglobal.waifu2x_exec) ? systemglobal.waifu2x_exec : 'waifu2x'), w2xOptions, {encoding: 'utf8'})
+                                            if (!systemglobal.waifu2x_no_log)
+                                                muginoMeltdown.stdout.on('data', (data) => console.log(data.toString().trim().split('\n').filter(e => e.trim().length > 1 && !e.trim().includes('===] ')).join('\n')))
+                                            muginoMeltdown.stderr.on('data', (data) => console.error(data.toString()));
+                                            muginoMeltdown.on('close', (code, signal) => {
+                                                (fs.readdirSync(systemglobal.waifu2x_input_path))
+                                                    .filter(e => fs.existsSync(path.join(systemglobal.deepbooru_output_path, `${e.split('.')[0]}.jpg`)) || fs.existsSync(path.join(systemglobal.deepbooru_output_path, `${e.split('.')[0]}.png`)))
+                                                    .map(e => fs.unlinkSync(path.resolve(systemglobal.waifu2x_input_path, e)))
+                                                if (code !== 0) {
+                                                    console.error(`Mugino Meltdown! MIITS Upscaler reported a error during upscale operation!`);
+                                                    upscaleIsActive = false;
+                                                    resolve(false)
+                                                } else {
+                                                    console.log(`Tagging Completed in ${((Date.now() - startTime) / 1000).toFixed(0)} sec!`);
+                                                    upscaleIsActive = false;
+                                                    resolve(true)
+                                                }
+                                            })
+                                        } else {
+                                            console.error(`Unexpectedly Failed to get message data for key ${key}`)
+                                            upscaleIsActive = false;
+                                            resolve(true);
+                                        }
+                                    })
+                                    .catch(err => {
+                                        console.error(`Unexpectedly Failed to get message for key ${key}`, err)
+                                        upscaleIsActive = false;
+                                        resolve(true);
+                                    })
+                            }))
+                        }, Promise.resolve());
+                        requests.then(async () => {
+                            completed();
+                        })
+                    })
+                } else {
+                    console.info(`There are no file that need to be upscaled!`);
+                    mittsIsActive = false;
+                    resolve(true)
+                }
+            })
+        } else {
+            return true;
+        }
+    }
+    let mittsIsActive = false;
+    async function queryImageTags() {
         if (!mittsIsActive) {
             mittsIsActive = true;
             console.log('Processing image tags via MIITS Client...')
@@ -645,6 +891,17 @@
                 if (imageFile)
                     fs.unlinkSync(path.join(systemglobal.deepbooru_input_path, (imageFile)));
                 LocalQueue.removeItem(key);
+            } else if ((filePath.split('/').pop().split('\\').pop().endsWith('.jpg') || filePath.split('/').pop().split('\\').pop().endsWith('.png')) && filePath.split('/').pop().split('\\').pop().startsWith('upscale-')) {
+                const key = path.basename(filePath).split('upscale-').pop().split('.')[0];
+                console.error(`Message ${key} has been upscaled!`);
+
+                mqClient.sendData( `${approved.destination}`, approved.message, function (ok) { });
+                fs.unlinkSync(filePath);
+                const imageFile = fs.readdirSync(systemglobal.waifu2x_input_path)
+                    .filter(k => k.split('.')[0] === path.basename(filePath).split('.')[0]).pop();
+                if (imageFile)
+                    fs.unlinkSync(path.join(systemglobal.waifu2x_input_path, (imageFile)));
+                UpscaleQueue.removeItem(key);
             }
         })
         .on('error', function (error) {
@@ -671,7 +928,9 @@
                     requests.then(async () => {
                         if (noResults !== analyzerGroups.length) {
                             console.log('Search Jobs Completed!, Starting MIITS Tagger...');
-                            await queryImageTags();
+                            clearTimeout(startEvaluating);
+                            startEvaluating = null;
+                            startEvaluating = setTimeout(processGPUWorkloads, 3000)
                             console.log('MIITS Tagger finished!');
                         }
                         completed();
@@ -682,7 +941,9 @@
                 if (_r)
                     noResults++;
                 console.log('Search Jobs Completed!, Starting MIITS Tagger...');
-                await queryImageTags();
+                clearTimeout(startEvaluating);
+                startEvaluating = null;
+                startEvaluating = setTimeout(processGPUWorkloads, 3000)
                 console.log('MIITS Tagger finished!');
             }
             if ((analyzerGroups && noResults === analyzerGroups.length) || (!analyzerGroups && noResults === 1))
@@ -694,6 +955,7 @@
         runTimer = setTimeout(parseUntilDone, 300000);
     }
 
+    await processGPUWorkloads();
     if (systemglobal.search)
         await parseUntilDone(systemglobal.search);
     console.log("First pass completed!")
