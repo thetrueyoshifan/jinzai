@@ -526,12 +526,14 @@
             init = true
         }
 
+        await validateImageInputs();
         await processGPUWorkloads();
         start();
         if (systemglobal.search)
             await parseUntilDone(systemglobal.search);
         console.log("First pass completed!")
     } else {
+        await validateImageInputs();
         await processGPUWorkloads();
         if (systemglobal.search)
             await parseUntilDone(systemglobal.search);
@@ -919,6 +921,17 @@
             })
         }
         return false;
+    }
+    async function validateImageInputs() {
+        const imageFile = fs.readdirSync(systemglobal.deepbooru_input_path).map(async e => {
+            try {
+                const image = await sharp(e).metadata();
+            } catch (err) {
+                console.error(err);
+
+            }
+        })
+
     }
 
 
