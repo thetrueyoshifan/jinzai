@@ -925,7 +925,7 @@
     async function validateImageInputs() {
         const imageFile = fs.readdirSync(systemglobal.deepbooru_input_path).map(async e => {
             try {
-                const image = await sharp(e).metadata();
+                const image = await sharp(fs.readFileSync(e)).metadata();
             } catch (err) {
                 console.error(err);
 
