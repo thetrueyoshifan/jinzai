@@ -511,21 +511,6 @@
             return true;
         }
         async function whenConnected() {
-            if (systemglobal.Watchdog_Host && systemglobal.Watchdog_ID) {
-                console.log(`Registering with Watchdog with ID "${systemglobal.Watchdog_ID}" as Entity "${facilityName}-${systemglobal.system_name}"`)
-                request.get(`http://${systemglobal.Watchdog_Host}/watchdog/init?id=${systemglobal.Watchdog_ID}&entity=${facilityName}-${systemglobal.system_name}`, async (err, res) => {
-                    if (err || res && res.statusCode !== undefined && res.statusCode !== 200) {
-                        console.error(`Failed to init watchdog server ${systemglobal.Watchdog_Host} as ${facilityName}:${systemglobal.Watchdog_ID}`);
-                    }
-                })
-                setInterval(() => {
-                    request.get(`http://${systemglobal.Watchdog_Host}/watchdog/init?id=${systemglobal.Watchdog_ID}&entity=${facilityName}-${systemglobal.system_name}`, async (err, res) => {
-                        if (err || res && res.statusCode !== undefined && res.statusCode !== 200) {
-                            console.error(`Failed to ping watchdog server ${systemglobal.Watchdog_Host} as ${facilityName}:${systemglobal.Watchdog_ID}`);
-                        }
-                    })
-                }, 60000)
-            }
             startWorker();
             startWorker2();
             startWorker3();
@@ -985,5 +970,21 @@
         }
         console.log('Waiting for next run... Zzzzz')
         runTimer = setTimeout(parseUntilDone, 300000);
+    }
+
+    if (systemglobal.Watchdog_Host && systemglobal.Watchdog_ID) {
+        console.log(`Registering with Watchdog with ID "${systemglobal.Watchdog_ID}" as Entity "${facilityName}-${systemglobal.system_name}"`)
+        request.get(`http://${systemglobal.Watchdog_Host}/watchdog/init?id=${systemglobal.Watchdog_ID}&entity=${facilityName}-${systemglobal.system_name}`, async (err, res) => {
+            if (err || res && res.statusCode !== undefined && res.statusCode !== 200) {
+                console.error(`Failed to init watchdog server ${systemglobal.Watchdog_Host} as ${facilityName}:${systemglobal.Watchdog_ID}`);
+            }
+        })
+        setInterval(() => {
+            request.get(`http://${systemglobal.Watchdog_Host}/watchdog/init?id=${systemglobal.Watchdog_ID}&entity=${facilityName}-${systemglobal.system_name}`, async (err, res) => {
+                if (err || res && res.statusCode !== undefined && res.statusCode !== 200) {
+                    console.error(`Failed to ping watchdog server ${systemglobal.Watchdog_Host} as ${facilityName}:${systemglobal.Watchdog_ID}`);
+                }
+            })
+        }, 60000)
     }
 })()
