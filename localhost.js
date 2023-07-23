@@ -3,7 +3,7 @@
     if (process.env.SYSTEM_NAME && process.env.SYSTEM_NAME.trim().length > 0)
         systemglobal.system_name = process.env.SYSTEM_NAME.trim()
     const facilityName = 'MuginoMIITS';
-
+    const sleep = (waitTimeInMs) => new Promise(resolve => setTimeout(resolve, waitTimeInMs));
     const md5 = require('md5');
     const cron = require('node-cron');
     const { spawn, exec } = require("child_process");
@@ -964,9 +964,15 @@
                             clearTimeout(startEvaluating);
                             startEvaluating = null;
                             startEvaluating = setTimeout(processGPUWorkloads, 3000)
+                            await sleep(5000);
+                            while (mittsIsActive) {
+                                await sleep(5000);
+                            }
                             console.log('MIITS Tagger finished!');
+                            completed();
+                        } else {
+                            completed();
                         }
-                        completed();
                     })
                 })
             } else {
@@ -977,6 +983,10 @@
                 clearTimeout(startEvaluating);
                 startEvaluating = null;
                 startEvaluating = setTimeout(processGPUWorkloads, 3000)
+                await sleep(5000);
+                while (mittsIsActive) {
+                    await sleep(5000);
+                }
                 console.log('MIITS Tagger finished!');
             }
             if ((analyzerGroups && noResults === analyzerGroups.length) || (!analyzerGroups && noResults === 1))
