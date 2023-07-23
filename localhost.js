@@ -139,7 +139,8 @@
                     await addTagForEid(eid, k, r);
                 });
                 fs.unlinkSync(jsonFilePath);
-                const imageFile = fs.readdirSync(systemglobal.deepbooru_input_path).filter(k => k.split('.')[0] === eid).pop();
+                const imageFile = fs.readdirSync(systemglobal.deepbooru_input_path)
+                    .filter(k => k.split('.')[0] === path.basename(filePath).split('.')[0]).pop();
                 if (imageFile)
                     fs.unlinkSync(path.join(systemglobal.deepbooru_input_path, (imageFile)));
                 activeFiles.delete(eid);
