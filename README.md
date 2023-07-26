@@ -1,18 +1,24 @@
-# Mugino MIITS Client for Sequenzia IntelliDex+ 
-<img width="700" src="https://user-images.githubusercontent.com/15165770/211075998-eef8e302-768c-4a78-8de3-fc287bade11d.png"><br/>
-Mugino MIITS Project<br/>
-Machine Intelligence Deep Image Tagging System (MIITS) Client for Sequenzia and IntelliDex
+# Jinzai Consolidation and Backup System for Sequenzia
+<!--<img width="700" src="https://user-images.githubusercontent.com/15165770/211075998-eef8e302-768c-4a78-8de3-fc287bade11d.png"><br/>!-->
+Jinzai Project<br/>
+Jinzai Image Consolidation and Data Backup System for Shutaura and Sequenzia
 
-Simple wrapper for DeepDanbooru to process images from Sequenzia and retrieve tagging data async from normal operations.
+Project designed to deduplicate images stored in Shutaura, as well as prep all data for backing up to Tape, Blu-Ray, or raw FS.
 
-## Tagging Process
-1. New images are pulled from database
-2. Images are downloaded and sent to an input folder
-3. MIITS compatible system exports tags from images
-4. Tags are parsed and uploaded to database and linked to images
+## Requirements
+- Exported ports from MQ and SQL
+- Twice the storage space in your working directory than your current capacity (this accounts for joining files)
 
-## Important Tagging Warning
-Sequenzia tagging is done "on the fly" to reduce the number of unnecessary tags that may never be used and just take up table space. Tag IDs WILL NOT match danbooru IDs! 
+## Deduplication process
+1. Images are pulled from selected channels and imported into temp directories
+2. First pass checks the MD5 of all loaded images for exact matches
+3. Second pass uses dupe-images to check the images via jimp for similarities
+4. Duplicate images are marked for archival via MQ
+
+## Backup process
+1. All files are pulled from selected channels and imported into temp directories
+2. Temp directories are passed through to ```tar```, ``cdrecord``, or stdout depending on the input parameters
+3. Optionally, directory structure is passed through gzip for compression before archival
 
 ## Example Configuration File - config.json
 ```json
@@ -27,45 +33,16 @@ Sequenzia tagging is done "on the fly" to reduce the number of unnecessary tags 
   "mq_user": "",
   "mq_pass": "",
   "mq_discord_out": "outbox.discord",
-  "mq_mugino_in": "inbox.mugino",
   "search": [
     {
-	  "class": ["review"],
-	  "limit": 4000
+	  "class": ["review"]
     },
     {
-	  "class": ["cosplay", "art", "photo"],
-	  "limit": 5000
+	  "class": ["cosplay", "art", "photo"]
     }
   ],
-  "rules": [
-	{
-		"channels": [
-			"863820375723606046"
-		]
-	},
-	{
-		"channels": [
-			"965828904629710878",
-			"964390001104257044",
-			"965828904629710878",
-			"968624369456775258",
-			"863820375723606046",
-			"964390001104257044"
-		],
-		"block": [
-			"no_humans",
-			"user_interface",
-			"phone_screen"
-		]
-	}
-  ],
-  "pull_limit": 4000,
   "parallel_downloads": 25,
-  "deepbooru_exec": "C:\\Users\\ykaza\\AppData\\Local\\Programs\\Python\\Python37\\Scripts\\deepdanbooru.exe",
-  "deepbooru_gpu": true,
-  "deepbooru_model_path": "./model/",
-  "deepbooru_input_path": "./temp/",
-  "deepbooru_output_path": "./results/"
 }
 ```
+
+*This project is currently heavily WIP!*
